@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: "Stack for ECR creation"
+Parameters:
+  riskdomain:
+    Type: String
+    Description: risk domain of the instance
+    Default: "WL"
+    AllowedValues:
+      - "DL"
+      - "AL"
+      - "WL"
+  dataclassification:
+    Type: String
+    Description: Name of the DataClassification for this bucket
+    Default: "yellow"
+    AllowedValues:
+      - "yellow"
+      - "green"
+      - "red"
+      ################################### Tagging Parameters ###################################
+    ########### Cost tags ###########
+  TopicName:
+    Type: String
+    Default: "A-nzrb-CloudWatch-Alarms"  
+  email:
+    Type: String
+    Description: "Email address to receive notifications"
+    Default: ""
+  
+
+Resources:
+  apiAlarms:
+    Type: AWS::SNS::Topic
+    Properties: 
+      TopicName: !Ref TopicName
+      Subscription:
+        - Endpoint: "vinnicnaz@gmail.com"
+          Protocol: email
+      Tags:
+        - Key: riskdomain
+          Value: !Ref riskdomain
+        - Key: dataclassification
+          Value: "nazarqwe"

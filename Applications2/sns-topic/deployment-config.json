@@ -1,0 +1,42 @@
+{
+  "deployments": [
+    {
+      "resource": "a-nzrb-sns",
+      "environments": ["dev"],
+      "runners": {
+        "dev": "custom"
+      },
+      "github_environments": {
+        "dev": ""
+      },
+      "aws_regions": {
+        "dev": "us-east-1"
+      },
+      "aws_roles": {
+        "dev": {
+          "aws_role_to_assume": "AWS_nzrb_ROLE_TO_ASSUME",
+          "cfn_role_arn": "CFN_ROLE_ARN",
+          "iam_execution_role_arn": "AWS_nzrb_ROLE_TO_ASSUME"
+        }
+      },
+      "parameters": {
+        "dev": {
+          "stack-name": "a-nzrb-sns-dev-test-applications2",
+          "bucket-name": "nzrb-s3-cfn",
+          "target-folder": "Applications2/sns-topic",
+          "source-folder": "Applications2/sns-topic",
+          "template-name": "template.yaml",
+          "parameter-file": "Applications2/sns-topic/dev.json",
+          "bucket-upload": "true",
+          "inline-parameters": [
+            {
+              "ParameterKey": "TopicName",
+              "ParameterValue": "a-nzrb-CloudWatch-Alarms-tesat123"
+            }
+          ],
+          "tags": "Name=a-nzrb-sns-dev-test22"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+name: Detect Changes and Deploy
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Applications*/**/template.yaml'
+      - 'Applications*/**/deployment-config.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Applications*/**/template.yaml'
+      - 'Applications*/**/deployment-config.json'
+  workflow_dispatch:
+    inputs:
+      resource_path:
+        description: 'Resource path (e.g., Applications1/sns-topic)'
+        required: true
+        type: string
+      environment:
+        description: 'Specific environment (leave empty for all)'
+        required: false
+        type: string
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changed Applications
+        id: detect-applications
+        shell: bash
+        run: |
+          # For manual workflow dispatch
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # For push and pull request events
+          CHANGED_PATHS=()
+          
+          # Use GitHub context to get changed files
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }})
+          else
+            CHANGED_FILES=$(jq -r '.pull_request.diff.files[].filename' "$GITHUB_EVENT_PATH")
+          fi
+
+          # Filter and extract unique Applications paths
+          while read -r file; do
+            if [[ "$file" =~ ^(Applications[0-9]+/[^/]+)/ ]]; then
+              RESOURCE_PATH="${BASH_REMATCH[1]}"
+              if [[ ! " ${CHANGED_PATHS[@]} " =~ " ${RESOURCE_PATH} " ]]; then
+                CHANGED_PATHS+=("$RESOURCE_PATH")
+              fi
+            fi
+          done <<< "$CHANGED_FILES"
+
+          # Convert array to comma-separated string
+          PATHS=$(IFS=,; echo "${CHANGED_PATHS[*]}")
+          echo "paths=$PATHS" >> $GITHUB_OUTPUT
+
+      - name: Set Matrix
+        id: set-matrix
+        shell: bash
+        run: |
+            PATHS="${{ steps.detect-applications.outputs.paths }}"
+
+            if [[ -z "$PATHS" ]]; then
+                # No changes detected
+                echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+                exit 0
+            fi
+
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                MATRIX=$(jq -n \
+                --arg resource_path "$PATHS" \
+                --arg environment "${{ github.event.inputs.environment }}" \
+                '{"include": [{"resource_path": $resource_path, "environment": $environment}]}')
+            else
+                MATRIX=$(echo "$PATHS" | tr ',' '\n' | jq -R . | jq -s '{
+                "include": map({
+                    "resource_path": .,
+                    "environment": ""
+                })
+                }')
+            fi
+
+            # Correctly handle multi-line JSON
+            echo "matrix<<EOF" >> $GITHUB_OUTPUT
+            echo "$MATRIX" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+
+  deploy-resources:
+    needs: detect-changes
+    if: ${{ fromJson(needs.detect-changes.outputs.matrix).include != '' }}
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    uses: ./.github/workflows/deploy-resource.yml
+    with:
+      resource_path: ${{ matrix.resource_path }}
+      specific_environment: ${{ matrix.environment || github.event.inputs.environment || '' }}
+    secrets:
+      AWS_nzrb_ROLE_TO_ASSUME: ${{ secrets.AWS_nzrb_ROLE_TO_ASSUME }}
+      CFN_ROLE_ARN: ${{ secrets.CFN_ROLE_ARN }}
+      IAM_EXECUTION_ROLE_ARN: ${{ secrets.AWS_nzrb_ROLE_TO_ASSUME }}

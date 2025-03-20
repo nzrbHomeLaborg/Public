@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: '(Cloudfront-as-default-00) Simple CloudFront distribution with an S3 origin'
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: The name of the bucket we are creating
+  Comment1:
+    Type: String
+    Description: this is comment to name
+Resources:
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: 'Delete'
+    Metadata:
+      Comment: !Ref Comment1
+    Properties:
+      BucketName: !Ref S3BucketName
+      CorsConfiguration:
+        CorsRules:
+          -
+            AllowedOrigins:
+              - '*'
+            AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            MaxAge: 3000
+
+Outputs:
+  S3BucketName:
+    Description: 'Bucket name'
+    Value: !Ref S3Bucket

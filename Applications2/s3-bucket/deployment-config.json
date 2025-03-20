@@ -1,0 +1,41 @@
+{
+    "deployments": [
+      {
+        "resource": "a-nzrb-s3",
+        "environments": ["dev"],
+        "runners": {
+          "dev": "custom"
+        },
+        "github_environments": {
+          "dev": ""
+        },
+        "aws_regions": {
+          "dev": "us-east-1"
+        },
+        "aws_roles": {
+          "dev": {
+            "aws_role_to_assume": "AWS_nzrb_ROLE_TO_ASSUME",
+            "cfn_role_arn": "CFN_ROLE_ARN",
+            "iam_execution_role_arn": "AWS_nzrb_ROLE_TO_ASSUME"
+          }
+        },
+        "parameters": {
+          "dev": {
+            "stack-name": "a-nzrb-s3-bucket",
+            "bucket-name": "nzrb-s3-cfn",
+            "target-folder": "Applications2/s3-bucket",
+            "source-folder": "Applications2/s3-bucket",
+            "template-name": "template.yaml",
+            "bucket-upload": "true",
+            "inline-parameters": [
+              {
+                "ParameterKey": "S3BucketName",
+                "ParameterValue": "a-nzrb-test-app2-bucket"
+              }
+            ],
+            "tags": "Name=a-nzrb-s3-dev-2222"
+          }
+        }
+      }
+    ]
+  }

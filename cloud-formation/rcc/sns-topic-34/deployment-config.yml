@@ -1,5 +1,5 @@
 deployments:
-  - resource: a-crs-sns-topic-32
+  - resource: a-crs-sns-topic-34
     environments:
       - dev
     runners:

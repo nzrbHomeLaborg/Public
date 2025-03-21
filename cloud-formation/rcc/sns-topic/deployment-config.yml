@@ -8,12 +8,15 @@ deployments:
       dev: CD-EM-CRS-DEV
     aws_regions:
       dev: us-east-1
-    aws_secret_names:
-      dev: "AWS_ROLE_TO_ASSUME"
-    cfn_secret_names:
-      dev: "AWS_ROLE_TO_ASSUME"
+    aws_role_secrets:
+      dev: AWS_ROLE_TO_ASSUME  # Ім'я секрету для AWS ролі в середовищі DEV
+    cfn_role_secrets:
+      dev: AWS_ROLE_TO_ASSUME  # Ім'я секрету для CloudFormation ролі в DEV
+    iam_execution_role_secrets:
+      dev: AWS_ROLE_TO_ASSUME     
     parameters:
       dev:
+        
         stack-name: a-crs-ecr-dev
         bucket-name: cd-azdo-central-cfn-a-crs-dev-us-east-2
         target-folder: cloud-formation/rcc/ecr

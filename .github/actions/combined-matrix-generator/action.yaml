@@ -107,8 +107,9 @@ runs:
             RUNNER=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].runners[$env]')
             GH_ENV=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].github_environments[$env]')
             AWS_REGION=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_regions[$env]')
-            AWS_SECRET_NAME=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_secret_names[$env]')
-            CFN_SECRET_NAME=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].cfn_secret_names[$env]')
+            AWS_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_role_secrets[$env] // "AWS_ROLE_TO_ASSUME"')
+            CFN_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].cfn_role_secrets[$env] // "CFN_ROLE_ARN"')
+            IAM_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].iam_execution_role_secrets[$env] // "IAM_EXECUTION_ROLE_ARN"')
             
                         
             # Skip if any required field is empty
@@ -119,7 +120,7 @@ runs:
             fi
             
             # Create matrix item (all on one line)
-            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_SECRET_NAME\",\"cfn_role_secret\":\"$CFN_SECRET_NAME\",\"parameters\":$PARAMS}"
+            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"parameters\":$PARAMS}"
 
             
             # Add to appropriate matrix based on environment

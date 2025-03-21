@@ -6,7 +6,10 @@ permissions:
 
 on:
   push:
-    branches: "*"
+    branches: [main]
+    paths:
+      - 'cloud-formation/rcc/**/deployment-config.yaml'
+      - 'cloud-formation/rcc/**/deployment-config.yml'    
   pull_request:
     branches: [main]
     paths:
@@ -81,6 +84,23 @@ jobs:
           echo "Final paths output: '$PATHS'"
           echo "paths=$PATHS" >> $GITHUB_OUTPUT
 
+      - name: Check Event Type and Branch
+        id: check-event
+        shell: bash
+        run: |
+          # Check if this is a pull request event
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "is_pull_request=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_pull_request=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check if this is on the main branch
+          if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.event.inputs.resource_path }}" != "" ]]; then
+            echo "is_main_branch=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_main_branch=false" >> $GITHUB_OUTPUT
+          fi
   prepare-matrices:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.resource_paths != '' }}
@@ -140,7 +160,11 @@ jobs:
 
   deploy-int:
     needs: [prepare-matrices, deploy-dev]
-    if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
+    if: >-
+      ${{ 
+        fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null &&
+        needs.detect-changes.outputs.is_pull_request == 'false'
+      }}
     runs-on: custom
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
@@ -177,7 +201,12 @@ jobs:
 
   deploy-prod:
     needs: [prepare-matrices, deploy-int]
-    if: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix).include[0] != null }}
+    if: >-
+      ${{ 
+        fromJSON(needs.prepare-matrices.outputs.prod_matrix).include[0] != null &&
+        needs.detect-changes.outputs.is_pull_request == 'false' &&
+        needs.detect-changes.outputs.is_main_branch == 'true'
+      }}
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix) }}

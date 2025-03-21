@@ -2,6 +2,7 @@ deployments:
   - resource: a-crs-sns-topic-34
     environments:
       - dev
+      - int
     runners:
       dev: ubuntu-latest    
     github_environments:
@@ -9,11 +10,14 @@ deployments:
     aws_regions:
       dev: us-east-1
     aws_role_secrets:
-      dev: AWS_ROLE_TO_ASSUME  # Ім'я секрету для AWS ролі в середовищі DEV
+      dev: AWS_ROLE_TO_ASSUME
+      int: AWS_ROLE_TO_ASSUME # Ім'я секрету для AWS ролі в середовищі DEV
     cfn_role_secrets:
-      dev: AWS_ROLE_TO_ASSUME  # Ім'я секрету для CloudFormation ролі в DEV
+      dev: AWS_ROLE_TO_ASSUME
+      int: AWS_ROLE_TO_ASSUME  # Ім'я секрету для CloudFormation ролі в DEV
     iam_execution_role_secrets:
-      dev: AWS_ROLE_TO_ASSUME     
+      dev: AWS_ROLE_TO_ASSUME 
+      int: AWS_ROLE_TO_ASSUME    
     parameters:
       dev:
         

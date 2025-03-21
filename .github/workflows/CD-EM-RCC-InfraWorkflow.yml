@@ -139,7 +139,7 @@ jobs:
           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
 
   deploy-int:
-    needs: [prepare-matrices, deploy-dev]
+    # needs: [prepare-matrices, deploy-dev]
     if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
     runs-on: custom
     strategy:

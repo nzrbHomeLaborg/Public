@@ -1,8 +1,8 @@
-name: 'Generate Deployment Matrices'
-description: 'Parses deployment config files and generates matrices for deployment'
+name: 'Generate Combined Deployment Matrices'
+description: 'Parses multiple deployment config files and generates combined matrices'
 inputs:
-  resource_path:
-    description: 'Path to the resource (e.g., Application1/a-CRS-sns)'
+  resource_paths:
+    description: 'Comma-separated paths to resources (e.g., cloud-formation/rcc/a-crs-spa,cloud-formation/rcc/another-resource)'
     required: true
   specific_environment:
     description: 'Specific environment to deploy (empty for all configured)'
@@ -40,97 +40,113 @@ runs:
       id: generate-matrices
       shell: bash
       run: |
-        CONFIG_PATH="${{ inputs.resource_path }}/deployment-config.yaml"
-        if [[ ! -f "$CONFIG_PATH" ]]; then
-          # Try YML extension as fallback
-          CONFIG_PATH="${{ inputs.resource_path }}/deployment-config.yml"
-          if [[ ! -f "$CONFIG_PATH" ]]; then
-            echo "::error::Configuration file not found: ${{ inputs.resource_path }}/deployment-config.yaml or .yml"
-            echo "dev_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "int_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "prod_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-        fi
-
-        # Read YAML config file and convert to JSON for processing
-        echo "Reading YAML configuration from $CONFIG_PATH"
-        CONFIG_CONTENT=$(yq -o=json eval . "$CONFIG_PATH")
-        echo "Config content (converted to JSON): $CONFIG_CONTENT"
-        
-        # Extract app and resource from path
-        RESOURCE_PATH="${{ inputs.resource_path }}"
-        APP=$(dirname "$RESOURCE_PATH")
-        RESOURCE=$(basename "$RESOURCE_PATH")
-        
-        echo "Using APP=$APP and RESOURCE=$RESOURCE"
-        
-        # Validate JSON structure
-        echo "$CONFIG_CONTENT" | jq . > /dev/null 2>&1
-        if [[ $? -ne 0 ]]; then
-          echo "::error::Invalid YAML structure in config file"
-          echo "dev_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-          echo "int_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-          echo "prod_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-          exit 1
-        fi
-        
-        # Get environments list
-        ENVIRONMENTS=$(echo "$CONFIG_CONTENT" | jq -r '.deployments[0].environments[]' 2>/dev/null || echo "")
-        if [[ -z "$ENVIRONMENTS" ]]; then
-          echo "::error::No environments found in configuration"
-          echo "dev_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-          echo "int_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-          echo "prod_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-          exit 1
-        fi
-        
-        echo "Found environments: $ENVIRONMENTS"
-
-        # Filter by specific environment if provided
-        if [[ "${{ inputs.specific_environment }}" != "" ]]; then
-          if echo "$ENVIRONMENTS" | grep -q "${{ inputs.specific_environment }}"; then
-            ENVIRONMENTS="${{ inputs.specific_environment }}"
-          else
-            echo "::warning::Specified environment not found in configuration"
-            echo "dev_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "int_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            echo "prod_matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-        fi
-        
-        # Initialize matrix items arrays
+        # Initialize empty arrays for matrix items
         DEV_MATRIX_ITEMS=()
         INT_MATRIX_ITEMS=()
         PROD_MATRIX_ITEMS=()
         
-        for ENV in $ENVIRONMENTS; do
-          echo "Processing environment: $ENV"
+        # Split input resource paths by comma
+        IFS=',' read -ra RESOURCE_PATHS <<< "${{ inputs.resource_paths }}"
+        
+        # Process each resource path
+        for RESOURCE_PATH in "${RESOURCE_PATHS[@]}"; do
+          echo "Processing resource path: $RESOURCE_PATH"
           
-          # Extract parameters as compact JSON (no newlines)
-          PARAMS=$(echo "$CONFIG_CONTENT" | jq -c --arg env "$ENV" '.deployments[0].parameters[$env]')
-          RUNNER=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].runners[$env]')
-          GH_ENV=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].github_environments[$env]')
-          AWS_REGION=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_regions[$env]')
-
-          # Create matrix item (all on one line)
-          MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"parameters\":$PARAMS}"
-    
-          # Add to appropriate matrix based on environment
-          if [[ "$ENV" == "dev" ]]; then
-            DEV_MATRIX_ITEMS+=("$MATRIX_ITEM")
-          elif [[ "$ENV" == "int" ]]; then
-            INT_MATRIX_ITEMS+=("$MATRIX_ITEM")
-          elif [[ "$ENV" == "prod" ]]; then
-            PROD_MATRIX_ITEMS+=("$MATRIX_ITEM")
+          # Try both YAML and YML extensions
+          CONFIG_PATH="${RESOURCE_PATH}/deployment-config.yaml"
+          if [[ ! -f "$CONFIG_PATH" ]]; then
+            CONFIG_PATH="${RESOURCE_PATH}/deployment-config.yml"
+            if [[ ! -f "$CONFIG_PATH" ]]; then
+              echo "::warning::Configuration file not found for $RESOURCE_PATH"
+              continue
+            fi
           fi
+          
+          # Read YAML config file and convert to JSON for processing
+          echo "Reading YAML configuration from $CONFIG_PATH"
+          CONFIG_CONTENT=$(yq -o=json eval . "$CONFIG_PATH")
+          
+          # Extract app and resource from path
+          APP=$(dirname "$RESOURCE_PATH")
+          RESOURCE=$(basename "$RESOURCE_PATH")
+          
+          echo "Using APP=$APP and RESOURCE=$RESOURCE"
+          
+          # Validate JSON structure
+          echo "$CONFIG_CONTENT" | jq . > /dev/null 2>&1
+          if [[ $? -ne 0 ]]; then
+            echo "::warning::Invalid YAML structure in $CONFIG_PATH"
+            continue
+          fi
+          
+          # Get environments list
+          ENVIRONMENTS=$(echo "$CONFIG_CONTENT" | jq -r '.deployments[0].environments[]' 2>/dev/null || echo "")
+          if [[ -z "$ENVIRONMENTS" ]]; then
+            echo "::warning::No environments found in $CONFIG_PATH"
+            continue
+          fi
+          
+          echo "Found environments: $ENVIRONMENTS"
+          
+          # Filter by specific environment if provided
+          if [[ "${{ inputs.specific_environment }}" != "" ]]; then
+            if echo "$ENVIRONMENTS" | grep -q "${{ inputs.specific_environment }}"; then
+              ENVIRONMENTS="${{ inputs.specific_environment }}"
+            else
+              echo "::warning::Specified environment not found in $CONFIG_PATH"
+              continue
+            fi
+          fi
+          
+          # Process each environment for this resource
+          for ENV in $ENVIRONMENTS; do
+            echo "Processing environment: $ENV for $RESOURCE_PATH"
+            
+            # Extract parameters as compact JSON (no newlines)
+            PARAMS=$(echo "$CONFIG_CONTENT" | jq -c --arg env "$ENV" '.deployments[0].parameters[$env]')
+            RUNNER=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].runners[$env]')
+            GH_ENV=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].github_environments[$env]')
+            AWS_REGION=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_regions[$env]')
+            
+            # Skip if any required field is empty
+            if [[ -z "$PARAMS" || "$PARAMS" == "null" || -z "$RUNNER" || "$RUNNER" == "null" || 
+                  -z "$GH_ENV" || "$GH_ENV" == "null" || -z "$AWS_REGION" || "$AWS_REGION" == "null" ]]; then
+              echo "::warning::Missing required configuration for $RESOURCE_PATH in $ENV environment"
+              continue
+            fi
+            
+            # Create matrix item (all on one line)
+            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"parameters\":$PARAMS}"
+            
+            # Add to appropriate matrix based on environment
+            if [[ "$ENV" == "dev" ]]; then
+              DEV_MATRIX_ITEMS+=("$MATRIX_ITEM")
+            elif [[ "$ENV" == "int" ]]; then
+              INT_MATRIX_ITEMS+=("$MATRIX_ITEM")
+            elif [[ "$ENV" == "prod" ]]; then
+              PROD_MATRIX_ITEMS+=("$MATRIX_ITEM")
+            fi
+          done
         done
         
         # Construct environment-specific matrices
-        DEV_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${DEV_MATRIX_ITEMS[*]}")]}";
-        INT_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${INT_MATRIX_ITEMS[*]}")]}";
-        PROD_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${PROD_MATRIX_ITEMS[*]}")]}";
+        if [ ${#DEV_MATRIX_ITEMS[@]} -eq 0 ]; then
+          DEV_MATRIX_JSON="{\"include\":[]}"
+        else
+          DEV_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${DEV_MATRIX_ITEMS[*]}")]}";
+        fi
+        
+        if [ ${#INT_MATRIX_ITEMS[@]} -eq 0 ]; then
+          INT_MATRIX_JSON="{\"include\":[]}"
+        else
+          INT_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${INT_MATRIX_ITEMS[*]}")]}";
+        fi
+        
+        if [ ${#PROD_MATRIX_ITEMS[@]} -eq 0 ]; then
+          PROD_MATRIX_JSON="{\"include\":[]}"
+        else
+          PROD_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${PROD_MATRIX_ITEMS[*]}")]}";
+        fi
         
         # Verify JSON is valid
         echo "$DEV_MATRIX_JSON" | jq . > /dev/null 2>&1

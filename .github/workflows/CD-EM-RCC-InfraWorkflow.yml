@@ -5,8 +5,12 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches: "*"
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'cloud-formation/**/template.yaml'
+  #     - 'cloud-formation/rcc/**/deployment-config.yaml'
+  #     - 'cloud-formation/rcc/deployment-config.yml'
   pull_request:
     branches: [main]
     paths:
@@ -28,7 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      resource_paths: ${{ steps.detect-applications.outputs.paths }}
+      specific_environment: ${{ github.event.inputs.environment }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -79,60 +84,11 @@ jobs:
           PATHS=$(IFS=,; echo "${CHANGED_PATHS[*]}")
           echo "Final paths output: '$PATHS'"
           echo "paths=$PATHS" >> $GITHUB_OUTPUT
-  
-      - name: Set Matrix
-        id: set-matrix
-        shell: bash
-        run: |
-            PATHS="${{ steps.detect-applications.outputs.paths }}"
-            echo "Detected paths: '$PATHS'"
-            
-            if [[ -z "$PATHS" || "$PATHS" == "" ]]; then
-                echo "No paths detected, using empty matrix."
-                echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-                exit 0
-            fi
 
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                MATRIX=$(jq -n \
-                --arg resource_path "$PATHS" \
-                --arg environment "${{ github.event.inputs.environment }}" \
-                '{"include": [{"resource_path": $resource_path, "environment": $environment}]}')
-            else
-                # Make sure we handle empty or invalid paths properly
-                VALID_PATHS=()
-                IFS=',' read -ra PATH_ARRAY <<< "$PATHS"
-                for path in "${PATH_ARRAY[@]}"; do
-                    if [[ -n "$path" && "$path" != "null" ]]; then
-                        VALID_PATHS+=("$path")
-                    fi
-                done
-                
-                if [ ${#VALID_PATHS[@]} -eq 0 ]; then
-                    echo "No valid paths found, using empty matrix."
-                    echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-                    exit 0
-                fi
-                
-                MATRIX_ITEMS=()
-                for path in "${VALID_PATHS[@]}"; do
-                    MATRIX_ITEMS+=("{\"resource_path\":\"$path\",\"environment\":\"\"}")
-                done
-                
-                MATRIX="{\"include\":[$(IFS=,; echo "${MATRIX_ITEMS[*]}")]}";
-            fi
-            
-            echo "Final matrix: $MATRIX"
-            echo "matrix<<EOF" >> $GITHUB_OUTPUT
-            echo "$MATRIX" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
   prepare-matrices:
     needs: detect-changes
-    if: ${{ fromJson(needs.detect-changes.outputs.matrix).include != '' }}
-    runs-on: custom
-    strategy:
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
-      fail-fast: false
+    if: ${{ needs.detect-changes.outputs.resource_paths != '' }}
+    runs-on: ubuntu-latest
     outputs:
       dev_matrix: ${{ steps.generate-matrices.outputs.dev_matrix }}
       int_matrix: ${{ steps.generate-matrices.outputs.int_matrix }}
@@ -142,12 +98,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Generate Deployment Matrices
+      - name: Generate Combined Deployment Matrices
         id: generate-matrices
-        uses: ./.github/actions/generate-matrices
+        uses: ./.github/actions/combined-matrix-generator
         with:
-          resource_path: ${{ matrix.resource_path }}
-          specific_environment: ${{ matrix.environment }}
+          resource_paths: ${{ needs.detect-changes.outputs.resource_paths }}
+          specific_environment: ${{ needs.detect-changes.outputs.specific_environment }}
 
   deploy-dev:
     needs: prepare-matrices
@@ -164,11 +120,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-    #   - name: Configure AWS credentials
-    #     uses: aws-actions/configure-aws-credentials@v4
-    #     with:
-    #       role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-    #       aws-region: ${{ matrix.aws_region }}
       
       - name: Deploy Stack
         uses: ./.github/actions/deploy-stack
@@ -206,11 +157,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ matrix.aws_region }}
       
       - name: Deploy Stack
         uses: ./.github/actions/deploy-stack
@@ -236,7 +182,7 @@ jobs:
   deploy-prod:
     needs: [prepare-matrices, deploy-int]
     if: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix).include[0] != null }}
-    runs-on: custom
+    runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix) }}
       fail-fast: false

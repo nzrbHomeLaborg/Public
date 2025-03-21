@@ -11,6 +11,7 @@ on:
       - 'cloud-formation/**/template.yaml'
       - 'cloud-formation/rcc/**/deployment-config.yaml'
       - 'cloud-formation/rcc/deployment-config.yml'
+      - '*'
   pull_request:
     branches: [main]
     paths:

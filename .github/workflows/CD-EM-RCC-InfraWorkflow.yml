@@ -104,7 +104,7 @@ jobs:
   deploy-dev:
     needs: prepare-matrices
     if: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null }}
-    runs-on: ${{ matrix.runners }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix) }}
       fail-fast: false

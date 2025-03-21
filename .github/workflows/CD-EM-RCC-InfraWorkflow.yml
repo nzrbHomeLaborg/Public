@@ -37,31 +37,66 @@ jobs:
         id: detect-applications
         shell: bash
         run: |
-          # For manual workflow dispatch
+          # For workflow_dispatch events
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          # For push and pull request events
           CHANGED_PATHS=()
           
-          # Get changed files
-          if [[ "${{ github.event_name }}" == "push" ]]; then
+          if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.action }}" == "synchronize" ]]; then
+            echo "PR synchronize event detected"
+            
+            # Get the commit message to help with debugging
+            echo "Latest commit message: $(git log -1 --pretty=%B)"
+            
+            # Print out what GitHub gives us about the event
+            echo "GitHub event before: ${{ github.event.before }}"
+            echo "GitHub event after: ${{ github.event.after }}"
+            
+            # Use git to get changes between before and after commits
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} || echo "")
+            
+            if [[ -z "$CHANGED_FILES" ]]; then
+              echo "No files found with git diff, trying alternative method..."
+              # Try to get commits in this PR
+              PR_COMMITS=$(curl -s -H "Authorization: token ${{ github.token }}" \
+                "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits")
+              
+              # Get the latest commit SHA
+              LATEST_COMMIT_SHA=$(echo "$PR_COMMITS" | jq -r '.[-1].sha')
+              echo "Latest commit SHA from API: $LATEST_COMMIT_SHA"
+              
+              # Get files changed in that commit
+              CHANGED_FILES=$(curl -s -H "Authorization: token ${{ github.token }}" \
+                "https://api.github.com/repos/${{ github.repository }}/commits/$LATEST_COMMIT_SHA" | \
+                jq -r '.files[].filename')
+            fi
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # For other PR events, check all changes
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            echo "Getting changed files for PR #$PR_NUMBER"
+            
+            CHANGED_FILES=$(curl -s -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files" | \
+              jq -r '.[].filename')
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            # For push events
             CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }})
           else
+            # For other events
             CHANGED_FILES=$(git diff --name-only HEAD~1 || echo "")
           fi
           
-          echo "All changed files:"
+          echo "All changed files being considered:"
           echo "$CHANGED_FILES"
           
-          # Filter for deployment config files
           echo "Filtering for deployment config files..."
           while read -r file; do
-            # Check if the file is a deployment config file (simpler regex)
+            # Check if the file is a deployment config file
             if [[ "$file" == cloud-formation/rcc/*deployment-config.y*ml ]]; then
-              # Extract the resource path (everything up to the folder containing the deployment-config)
+              # Extract the resource path
               RESOURCE_PATH=$(dirname "$file")
               echo "  Match found! File: $file, Resource path: $RESOURCE_PATH"
               

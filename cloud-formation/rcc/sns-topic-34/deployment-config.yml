@@ -5,7 +5,7 @@ deployments:
       - int
     runners:
       dev: custom
-      int:  custom
+      int: custom
     github_environments:
       dev: CD-EM-CRS-DEV
       int: CD-EM-CRS-DEV

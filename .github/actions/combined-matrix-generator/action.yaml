@@ -107,7 +107,10 @@ runs:
             RUNNER=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].runners[$env]')
             GH_ENV=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].github_environments[$env]')
             AWS_REGION=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_regions[$env]')
+            AWS_SECRET_NAME=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_secret_names[$env]')
+            CFN_SECRET_NAME=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].cfn_secret_names[$env]')
             
+                        
             # Skip if any required field is empty
             if [[ -z "$PARAMS" || "$PARAMS" == "null" || -z "$RUNNER" || "$RUNNER" == "null" || 
                   -z "$GH_ENV" || "$GH_ENV" == "null" || -z "$AWS_REGION" || "$AWS_REGION" == "null" ]]; then
@@ -116,7 +119,8 @@ runs:
             fi
             
             # Create matrix item (all on one line)
-            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"parameters\":$PARAMS}"
+            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_SECRET_NAME\",\"cfn_role_secret\":\"$CFN_SECRET_NAME\",\"parameters\":$PARAMS}"
+
             
             # Add to appropriate matrix based on environment
             if [[ "$ENV" == "dev" ]]; then

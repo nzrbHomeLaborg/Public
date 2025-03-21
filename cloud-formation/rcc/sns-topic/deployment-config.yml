@@ -8,11 +8,10 @@ deployments:
       dev: CD-EM-CRS-DEV
     aws_regions:
       dev: us-east-1
-    aws_roles:
-      dev:
-        aws_role_to_assume: AWS_CRS_ROLE_TO_ASSUME
-        cfn_role_arn: CFN_ROLE_ARN
-        iam_execution_role_arn: AWS_CRS_ROLE_TO_ASSUME
+    aws_secret_names:
+      dev: "AWS_ROLE_TO_ASSUME"
+    cfn_secret_names:
+      dev: "AWS_ROLE_TO_ASSUME"
     parameters:
       dev:
         stack-name: a-crs-ecr-dev

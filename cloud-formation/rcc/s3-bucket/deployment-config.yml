@@ -27,7 +27,7 @@ deployments:
         inline-parameters:
           - ParameterKey: ECRName
             ParameterValue: a-crs-ecr-dev
-        tags: Name=a-crs-s3-bucket-dev-twt-test
+        tags: Name=a-crs-s3-bucket-dev-twt-test12312
         
 
         

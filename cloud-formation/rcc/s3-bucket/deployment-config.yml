@@ -1,5 +1,5 @@
 deployments:
-  - resource: a-crs-s3-bucket-test-31313
+  - resource: a-crs-s3-bucket-test
     environments:
       - dev
     runners:

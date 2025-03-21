@@ -35,98 +35,97 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect Changed Applications
-        id: detect-applications
-        shell: bash
-        run: |
-          # For manual workflow dispatch
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # For push and pull request events
-          CHANGED_PATHS=()
-          
-          # Get changed files
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }})
-          else
-            CHANGED_FILES=$(git diff --name-only HEAD~1 || echo "")
-          fi
-          
-          echo "All changed files:"
-          echo "$CHANGED_FILES"
-          
-          # Filter for deployment config files
-          echo "Filtering for deployment config files..."
-          while read -r file; do
-            # Check if the file is a deployment config file (simpler regex)
-            if [[ "$file" == cloud-formation/rcc/*deployment-config.y*ml ]]; then
-              # Extract the resource path (everything up to the folder containing the deployment-config)
-              RESOURCE_PATH=$(dirname "$file")
-              echo "  Match found! File: $file, Resource path: $RESOURCE_PATH"
-              
-              if [[ ! " ${CHANGED_PATHS[@]} " =~ " ${RESOURCE_PATH} " ]]; then
-                CHANGED_PATHS+=("$RESOURCE_PATH")
-              fi
-            fi
-          done <<< "$CHANGED_FILES"
-          
-          echo "Detected resource paths: ${CHANGED_PATHS[*]}"
-          
-          # Convert array to comma-separated string
-          PATHS=$(IFS=,; echo "${CHANGED_PATHS[*]}")
-          echo "Final paths output: '$PATHS'"
-          echo "paths=$PATHS" >> $GITHUB_OUTPUT
-
-      - name: Set Matrix
-        id: set-matrix
-        shell: bash
-        run: |
-            PATHS="${{ steps.detect-applications.outputs.paths }}"
-            echo "Detected paths: '$PATHS'"
-            
-            if [[ -z "$PATHS" || "$PATHS" == "" ]]; then
-                echo "No paths detected, using empty matrix."
-                echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-                exit 0
-            fi
-
+          - name: Detect Changed Applications
+          id: detect-applications
+          shell: bash
+          run: |
+            # For manual workflow dispatch
             if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                MATRIX=$(jq -n \
-                --arg resource_path "$PATHS" \
-                --arg environment "${{ github.event.inputs.environment }}" \
-                '{"include": [{"resource_path": $resource_path, "environment": $environment}]}')
-            else
-                # Make sure we handle empty or invalid paths properly
-                VALID_PATHS=()
-                IFS=',' read -ra PATH_ARRAY <<< "$PATHS"
-                for path in "${PATH_ARRAY[@]}"; do
-                    if [[ -n "$path" && "$path" != "null" ]]; then
-                        VALID_PATHS+=("$path")
-                    fi
-                done
-                
-                if [ ${#VALID_PATHS[@]} -eq 0 ]; then
-                    echo "No valid paths found, using empty matrix."
-                    echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
-                    exit 0
-                fi
-                
-                MATRIX_ITEMS=()
-                for path in "${VALID_PATHS[@]}"; do
-                    MATRIX_ITEMS+=("{\"resource_path\":\"$path\",\"environment\":\"\"}")
-                done
-                
-                MATRIX="{\"include\":[$(IFS=,; echo "${MATRIX_ITEMS[*]}")]}";
+              echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
+              exit 0
             fi
             
-            echo "Final matrix: $MATRIX"
-            echo "matrix<<EOF" >> $GITHUB_OUTPUT
-            echo "$MATRIX" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-
+            # For push and pull request events
+            CHANGED_PATHS=()
+            
+            # Get changed files
+            if [[ "${{ github.event_name }}" == "push" ]]; then
+              CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }})
+            else
+              CHANGED_FILES=$(git diff --name-only HEAD~1 || echo "")
+            fi
+            
+            echo "All changed files:"
+            echo "$CHANGED_FILES"
+            
+            # Filter for deployment config files
+            echo "Filtering for deployment config files..."
+            while read -r file; do
+              # Check if the file is a deployment config file (simpler regex)
+              if [[ "$file" == cloud-formation/rcc/*deployment-config.y*ml ]]; then
+                # Extract the resource path (everything up to the folder containing the deployment-config)
+                RESOURCE_PATH=$(dirname "$file")
+                echo "  Match found! File: $file, Resource path: $RESOURCE_PATH"
+                
+                if [[ ! " ${CHANGED_PATHS[@]} " =~ " ${RESOURCE_PATH} " ]]; then
+                  CHANGED_PATHS+=("$RESOURCE_PATH")
+                fi
+              fi
+            done <<< "$CHANGED_FILES"
+            
+            echo "Detected resource paths: ${CHANGED_PATHS[*]}"
+            
+            # Convert array to comma-separated string
+            PATHS=$(IFS=,; echo "${CHANGED_PATHS[*]}")
+            echo "Final paths output: '$PATHS'"
+            echo "paths=$PATHS" >> $GITHUB_OUTPUT
+  
+        - name: Set Matrix
+          id: set-matrix
+          shell: bash
+          run: |
+              PATHS="${{ steps.detect-applications.outputs.paths }}"
+              echo "Detected paths: '$PATHS'"
+              
+              if [[ -z "$PATHS" || "$PATHS" == "" ]]; then
+                  echo "No paths detected, using empty matrix."
+                  echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+                  exit 0
+              fi
+  
+              if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                  MATRIX=$(jq -n \
+                  --arg resource_path "$PATHS" \
+                  --arg environment "${{ github.event.inputs.environment }}" \
+                  '{"include": [{"resource_path": $resource_path, "environment": $environment}]}')
+              else
+                  # Make sure we handle empty or invalid paths properly
+                  VALID_PATHS=()
+                  IFS=',' read -ra PATH_ARRAY <<< "$PATHS"
+                  for path in "${PATH_ARRAY[@]}"; do
+                      if [[ -n "$path" && "$path" != "null" ]]; then
+                          VALID_PATHS+=("$path")
+                      fi
+                  done
+                  
+                  if [ ${#VALID_PATHS[@]} -eq 0 ]; then
+                      echo "No valid paths found, using empty matrix."
+                      echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+                      exit 0
+                  fi
+                  
+                  MATRIX_ITEMS=()
+                  for path in "${VALID_PATHS[@]}"; do
+                      MATRIX_ITEMS+=("{\"resource_path\":\"$path\",\"environment\":\"\"}")
+                  done
+                  
+                  MATRIX="{\"include\":[$(IFS=,; echo "${MATRIX_ITEMS[*]}")]}";
+              fi
+              
+              echo "Final matrix: $MATRIX"
+              echo "matrix<<EOF" >> $GITHUB_OUTPUT
+              echo "$MATRIX" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
   prepare-matrices:
     needs: detect-changes
     if: ${{ fromJson(needs.detect-changes.outputs.matrix).include != '' }}

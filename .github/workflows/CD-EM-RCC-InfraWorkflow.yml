@@ -169,11 +169,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ matrix.aws_region }}
+    #   - name: Configure AWS credentials
+    #     uses: aws-actions/configure-aws-credentials@v4
+    #     with:
+    #       role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+    #       aws-region: ${{ matrix.aws_region }}
       
       - name: Deploy Stack
         uses: ./.github/actions/deploy-stack

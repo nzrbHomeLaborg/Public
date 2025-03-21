@@ -33,70 +33,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect Changed Applications
-        id: detect-applications
-        shell: bash
+      # For workflow_dispatch events, use the input directly
+      - name: Set resource path from input
+        if: github.event_name == 'workflow_dispatch'
+        id: set-path-from-input
         run: |
-          # For workflow_dispatch events
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
-            exit 0
-          fi
+          echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
+
+      # For push and pull_request events, use the action to detect changes
+      - name: Detect Changed Files
+        if: github.event_name != 'workflow_dispatch'
+        id: changed-files
+        uses: younited/detect-branch-changes-action@v0.1.3
+        with:
+          # For push to main, compare with the previous state
+          from: ${{ github.event.before }}
+          to: ${{ github.sha }}
+          # For pull requests, the action handles this automatically
           
+      # Process the detected files to find deployment config changes
+      - name: Extract Deployment Config Changes
+        if: github.event_name != 'workflow_dispatch'
+        id: extract-paths
+        run: |
           CHANGED_PATHS=()
           
-          if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.action }}" == "synchronize" ]]; then
-            echo "PR synchronize event detected"
-            
-            # Get the commit message to help with debugging
-            echo "Latest commit message: $(git log -1 --pretty=%B)"
-            
-            # Print out what GitHub gives us about the event
-            echo "GitHub event before: ${{ github.event.before }}"
-            echo "GitHub event after: ${{ github.event.after }}"
-            
-            # Use git to get changes between before and after commits
-            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} || echo "")
-            
-            if [[ -z "$CHANGED_FILES" ]]; then
-              echo "No files found with git diff, trying alternative method..."
-              # Try to get commits in this PR
-              PR_COMMITS=$(curl -s -H "Authorization: token ${{ github.token }}" \
-                "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits")
-              
-              # Get the latest commit SHA
-              LATEST_COMMIT_SHA=$(echo "$PR_COMMITS" | jq -r '.[-1].sha')
-              echo "Latest commit SHA from API: $LATEST_COMMIT_SHA"
-              
-              # Get files changed in that commit
-              CHANGED_FILES=$(curl -s -H "Authorization: token ${{ github.token }}" \
-                "https://api.github.com/repos/${{ github.repository }}/commits/$LATEST_COMMIT_SHA" | \
-                jq -r '.files[].filename')
-            fi
-          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # For other PR events, check all changes
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-            echo "Getting changed files for PR #$PR_NUMBER"
-            
-            CHANGED_FILES=$(curl -s -H "Authorization: token ${{ github.token }}" \
-              "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files" | \
-              jq -r '.[].filename')
-          elif [[ "${{ github.event_name }}" == "push" ]]; then
-            # For push events
-            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }})
-          else
-            # For other events
-            CHANGED_FILES=$(git diff --name-only HEAD~1 || echo "")
-          fi
-          
-          echo "All changed files being considered:"
+          # Get the list of changed files
+          CHANGED_FILES="${{ steps.changed-files.outputs.changed_files }}"
+          echo "All changed files:"
           echo "$CHANGED_FILES"
           
+          # Filter for deployment config files
           echo "Filtering for deployment config files..."
-          while read -r file; do
-            # Check if the file is a deployment config file
+          for file in $CHANGED_FILES; do
             if [[ "$file" == cloud-formation/rcc/*deployment-config.y*ml ]]; then
-              # Extract the resource path
               RESOURCE_PATH=$(dirname "$file")
               echo "  Match found! File: $file, Resource path: $RESOURCE_PATH"
               
@@ -104,7 +74,7 @@ jobs:
                 CHANGED_PATHS+=("$RESOURCE_PATH")
               fi
             fi
-          done <<< "$CHANGED_FILES"
+          done
           
           echo "Detected resource paths: ${CHANGED_PATHS[*]}"
           
@@ -112,6 +82,32 @@ jobs:
           PATHS=$(IFS=,; echo "${CHANGED_PATHS[*]}")
           echo "Final paths output: '$PATHS'"
           echo "paths=$PATHS" >> $GITHUB_OUTPUT
+      
+      # Combine outputs from both potential sources
+      - name: Set Final Resource Paths
+        id: set-final-paths
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            FINAL_PATHS="${{ steps.set-path-from-input.outputs.paths }}"
+          else
+            FINAL_PATHS="${{ steps.extract-paths.outputs.paths }}"
+          fi
+          
+          echo "paths=$FINAL_PATHS" >> $GITHUB_OUTPUT
+          echo "Final resource paths to deploy: $FINAL_PATHS"
+      
+      # Continue with your deployment steps conditionally
+      - name: Continue only if paths were detected
+        id: check-paths
+        run: |
+          PATHS="${{ steps.set-final-paths.outputs.paths }}"
+          if [[ -z "$PATHS" ]]; then
+            echo "No deployment config files were changed. Skipping deployment."
+            echo "should_continue=false" >> $GITHUB_OUTPUT
+          else
+            echo "Deployment config files were changed. Proceeding with deployment."
+            echo "should_continue=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Check Event Type and Branch
         id: check-event

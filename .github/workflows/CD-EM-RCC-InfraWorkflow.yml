@@ -1,0 +1,281 @@
+name: CD-EM-RCC-InfraWorkflow
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'cloud-formation/**/template.yaml'
+  #     - 'cloud-formation/rcc/**/deployment-config.yaml'
+  #     - 'cloud-formation/rcc/deployment-config.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cloud-formation/rcc/**/deployment-config.yaml'
+      - 'cloud-formation/rcc/**/deployment-config.yml'
+  workflow_dispatch:
+    inputs:
+      resource_path:
+        description: 'Resource path (e.g., cloud-formation/rcc/a-crs-spa)'
+        required: true
+        type: string
+      environment:
+        description: 'Specific environment (leave empty for all)'
+        required: false
+        type: string
+
+jobs:
+  detect-changes:
+    runs-on: custom
+    
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changed Applications
+        id: detect-applications
+        shell: bash
+        run: |
+          # For manual workflow dispatch
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # For push and pull request events
+          CHANGED_PATHS=()
+          
+          # Get changed files
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }})
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD~1 || echo "")
+          fi
+          
+          echo "All changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Filter for deployment config files
+          echo "Filtering for deployment config files..."
+          while read -r file; do
+            # Check if the file is a deployment config file (simpler regex)
+            if [[ "$file" == cloud-formation/rcc/*deployment-config.y*ml ]]; then
+              # Extract the resource path (everything up to the folder containing the deployment-config)
+              RESOURCE_PATH=$(dirname "$file")
+              echo "  Match found! File: $file, Resource path: $RESOURCE_PATH"
+              
+              if [[ ! " ${CHANGED_PATHS[@]} " =~ " ${RESOURCE_PATH} " ]]; then
+                CHANGED_PATHS+=("$RESOURCE_PATH")
+              fi
+            fi
+          done <<< "$CHANGED_FILES"
+          
+          echo "Detected resource paths: ${CHANGED_PATHS[*]}"
+          
+          # Convert array to comma-separated string
+          PATHS=$(IFS=,; echo "${CHANGED_PATHS[*]}")
+          echo "Final paths output: '$PATHS'"
+          echo "paths=$PATHS" >> $GITHUB_OUTPUT
+
+      - name: Set Matrix
+        id: set-matrix
+        shell: bash
+        run: |
+            PATHS="${{ steps.detect-applications.outputs.paths }}"
+            echo "Detected paths: '$PATHS'"
+            
+            if [[ -z "$PATHS" || "$PATHS" == "" ]]; then
+                echo "No paths detected, using empty matrix."
+                echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+                exit 0
+            fi
+
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                MATRIX=$(jq -n \
+                --arg resource_path "$PATHS" \
+                --arg environment "${{ github.event.inputs.environment }}" \
+                '{"include": [{"resource_path": $resource_path, "environment": $environment}]}')
+            else
+                # Make sure we handle empty or invalid paths properly
+                VALID_PATHS=()
+                IFS=',' read -ra PATH_ARRAY <<< "$PATHS"
+                for path in "${PATH_ARRAY[@]}"; do
+                    if [[ -n "$path" && "$path" != "null" ]]; then
+                        VALID_PATHS+=("$path")
+                    fi
+                done
+                
+                if [ ${#VALID_PATHS[@]} -eq 0 ]; then
+                    echo "No valid paths found, using empty matrix."
+                    echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+                    exit 0
+                fi
+                
+                MATRIX_ITEMS=()
+                for path in "${VALID_PATHS[@]}"; do
+                    MATRIX_ITEMS+=("{\"resource_path\":\"$path\",\"environment\":\"\"}")
+                done
+                
+                MATRIX="{\"include\":[$(IFS=,; echo "${MATRIX_ITEMS[*]}")]}";
+            fi
+            
+            echo "Final matrix: $MATRIX"
+            echo "matrix<<EOF" >> $GITHUB_OUTPUT
+            echo "$MATRIX" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+
+  prepare-matrices:
+    needs: detect-changes
+    if: ${{ fromJson(needs.detect-changes.outputs.matrix).include != '' }}
+    runs-on: custom
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    outputs:
+      dev_matrix: ${{ steps.generate-matrices.outputs.dev_matrix }}
+      int_matrix: ${{ steps.generate-matrices.outputs.int_matrix }}
+      prod_matrix: ${{ steps.generate-matrices.outputs.prod_matrix }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Generate Deployment Matrices
+        id: generate-matrices
+        uses: ./.github/actions/generate-matrices
+        with:
+          resource_path: ${{ matrix.resource_path }}
+          specific_environment: ${{ matrix.environment }}
+
+  deploy-dev:
+    needs: prepare-matrices
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null }}
+    runs-on: custom
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
+    
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to DEV
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ matrix.aws_region }}
+      
+      - name: Deploy Stack
+        uses: ./.github/actions/deploy-stack
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
+          iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
+
+  deploy-int:
+    needs: [prepare-matrices, deploy-dev]
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
+    runs-on: custom
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
+    
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ matrix.aws_region }}
+      
+      - name: Deploy Stack
+        uses: ./.github/actions/deploy-stack
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
+          iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
+
+  deploy-prod:
+    needs: [prepare-matrices, deploy-int]
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix).include[0] != null }}
+    runs-on: custom
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
+    
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to PROD
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ matrix.aws_region }}
+      
+      - name: Deploy Stack
+        uses: ./.github/actions/deploy-stack
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
+          iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}

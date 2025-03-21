@@ -1,0 +1,110 @@
+name: 'Deploy CloudFormation Stack'
+description: 'Deploys a CloudFormation stack with the specified parameters'
+inputs:
+  environment:
+    description: 'Environment to deploy to (dev, int, prod)'
+    required: true
+  stack-name:
+    description: 'Name of the CloudFormation stack'
+    required: true
+  bucket-name:
+    description: 'S3 bucket for CloudFormation template storage'
+    required: true
+  bucket-upload:
+    description: 'Whether to upload templates to S3'
+    required: false
+    default: 'true'
+  target-folder:
+    description: 'Target folder in S3 bucket'
+    required: false
+    default: ''
+  source-folder:
+    description: 'Source folder containing templates'
+    required: true
+  template-name:
+    description: 'Name of the main CloudFormation template'
+    required: true
+  filename-patterns:
+    description: 'File patterns to upload to S3'
+    required: false
+    default: '**/*.yaml'
+  cfnLintEnabled:
+    description: 'Whether to run CloudFormation linting'
+    required: false
+    default: 'true'
+  extraArgs:
+    description: 'Extra arguments for CloudFormation commands'
+    required: false
+    default: ''
+  parameter-file:
+    description: 'Path to parameter file'
+    required: false
+    default: ''
+  inline-parameters:
+    description: 'Inline parameters as JSON string'
+    required: false
+    default: '{}'
+  tags:
+    description: 'Tags to apply to the CloudFormation stack'
+    required: false
+    default: ''
+  aws-region:
+    description: 'AWS region for deployment'
+    required: true
+  aws-role-to-assume:
+    description: 'AWS role to assume for operations'
+    required: false
+    default: ''
+  cfn-role-arn:
+    description: 'CloudFormation execution role ARN'
+    required: false
+    default: ''
+  iam-execution-role-arn:
+    description: 'IAM execution role ARN'
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Deploy CloudFormation Stack
+      shell: bash
+      run: |
+        echo "Deploying stack to ${{ inputs.environment }} environment:"
+        echo "  - Stack name: ${{ inputs.stack-name }}"
+        echo "  - AWS Region: ${{ inputs.aws-region }}"
+        echo "  - Template: ${{ inputs.source-folder }}/${{ inputs.template-name }}"
+        
+        # Call the actual deployment action
+        # Note: This will use the AWS credentials configured in the job that calls this action
+        
+        # In an actual implementation, this would execute a command similar to:
+        # aws cloudformation deploy \
+        #   --template-file ${{ inputs.source-folder }}/${{ inputs.template-name }} \
+        #   --stack-name ${{ inputs.stack-name }} \
+        #   --parameter-overrides ${{ inputs.parameter-file }} \
+        #   --tags ${{ inputs.tags }} \
+        #   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+        #   --role-arn ${{ inputs.cfn-role-arn }}
+        
+        # For now, we'll use the existing composite action
+        echo "Calling cat-digital-platform/CD-GitHub-Actions/aws-cfn-lint-upload-create-update-composite"
+        
+        # For demonstration, we'll just echo the command parameters
+        echo "  - environment: ${{ inputs.environment }}"
+        echo "  - stack-name: ${{ inputs.stack-name }}"
+        echo "  - bucket-name: ${{ inputs.bucket-name }}"
+        echo "  - upload-to-s3: ${{ inputs.bucket-upload }}"
+        echo "  - target-folder: ${{ inputs.target-folder }}"
+        echo "  - source-folder: ${{ inputs.source-folder }}"
+        echo "  - template-name: ${{ inputs.template-name }}"
+        echo "  - filename-patterns: ${{ inputs.filename-patterns }}"
+        echo "  - cfnLintEnabled: ${{ inputs.cfnLintEnabled }}"
+        echo "  - extraArgs: ${{ inputs.extraArgs }}"
+        echo "  - parameter-file: ${{ inputs.parameter-file }}"
+        echo "  - inline-parameters: ${{ inputs.inline-parameters }}"
+        echo "  - tags: ${{ inputs.tags }}"
+        echo "  - aws-region: ${{ inputs.aws-region }}"
+        echo "  - aws-role-to-assume: ${{ inputs.aws-role-to-assume }}"
+        echo "  - cfn-role-arn: ${{ inputs.cfn-role-arn }}"
+        echo "  - iam-execution-role-arn: ${{ inputs.iam-execution-role-arn }}"

@@ -6,12 +6,7 @@ permissions:
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'cloud-formation/**/template.yaml'
-      - 'cloud-formation/rcc/**/deployment-config.yaml'
-      - 'cloud-formation/rcc/deployment-config.yml'
-      - '*'
+    branches: "*"
   pull_request:
     branches: [main]
     paths:

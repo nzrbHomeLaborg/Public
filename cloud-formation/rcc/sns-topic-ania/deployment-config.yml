@@ -1,5 +1,5 @@
 deployments:
-  - resource: a-crs-sns-topic
+  - resource: a-crs-sns-ania
     environments:
       - dev
       - int
@@ -50,7 +50,7 @@ deployments:
           inline-parameters:
             - ParameterKey: ECRName
               ParameterValue: a-crs-ecr-dev
-          tags: Name=a-crs-s3-bucket-dev-twt123-123123
+          tags: Name=a-crs-s3-bucket-dev-twt123-123tst-23
   
 
 

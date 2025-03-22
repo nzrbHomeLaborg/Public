@@ -40,14 +40,14 @@ jobs:
           resource_path: ${{ github.event.inputs.resource_path }}
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Show detected paths
-        shell: bash
-        run: echo "Detected paths: ${{ steps.detect.outputs.resource_paths }}"
+      # - name: Show detected paths
+      #   shell: bash
+      #   run: echo "Detected paths: ${{ steps.detect.outputs.resource_paths }}"
 
   prepare-matrices:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.resource_paths != '' }}
-    runs-on: ubuntu-latest
+    runs-on: custom
     outputs:
       dev_matrix: ${{ steps.generate-matrices.outputs.dev_matrix }}
       int_matrix: ${{ steps.generate-matrices.outputs.int_matrix }}

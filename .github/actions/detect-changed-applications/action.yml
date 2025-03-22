@@ -11,7 +11,7 @@ inputs:
     default: ${{ github.token }}
 
 outputs:
-  paths:
+  resource_paths:
     description: 'Comma-separated list of changed resource paths'
     value: ${{ steps.detect-applications.outputs.paths }}
 
@@ -110,7 +110,7 @@ runs:
         fi
         
         log "Final paths output: '$PATHS'"
-        echo "paths=$PATHS" >> $GITHUB_OUTPUT
+        echo "resource_paths=$PATHS" >> $GITHUB_OUTPUT
         
         # Debug info for empty results
         if [[ -z "$PATHS" ]]; then

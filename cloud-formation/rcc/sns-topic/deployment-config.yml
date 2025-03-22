@@ -1,5 +1,6 @@
 deployments:
-  - resource: a-crs-sns-topi
+  - resource: a-crs-sns-topi12312
+  
     environments:
       - dev
     runners:

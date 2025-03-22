@@ -23,9 +23,8 @@ on:
 jobs:
   detect-changes:
     runs-on: custom
-    
     outputs:
-      resource_paths: ${{ steps.detect-applications.outputs.paths }}
+      resource_paths: ${{ steps.detect-changes-action.outputs.paths }}
       specific_environment: ${{ github.event.inputs.environment }}
     steps:
       - name: Checkout repository
@@ -33,17 +32,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect changed applications
-        id: detect
-        uses: ./.github/actions/detect-changed-applications
+      - name: Detect Changed Applications
+        id: detect-changes-action
+        uses: ./.github/actions/detect-changes-action
         with:
-          resource_path: ${{ github.event.inputs.resource_path }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ github.token }}
+          event_name: ${{ github.event_name }}
+          github_sha: ${{ github.sha }}
+          github_ref: ${{ github.ref }}
+          event_before: ${{ github.event.before || '' }}
+          pull_request_number: ${{ github.event.pull_request.number || '' }}
+          resource_path_input: ${{ github.event.inputs.resource_path || '' }}
+          repository: ${{ github.repository }}
       
       - name: Show detected paths
         shell: bash
         run: |
-          echo "Detected paths: ${{ steps.detect.outputs.resource_paths }}"
+          echo "Detected paths: ${{ steps.detect-changes-action.outputs.resource_paths }}"
         
   prepare-matrices:
     needs: detect-changes

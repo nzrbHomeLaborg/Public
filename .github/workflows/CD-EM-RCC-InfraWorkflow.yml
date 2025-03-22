@@ -22,7 +22,7 @@ on:
 
 jobs:
   detect-changes:
-    runs-on: ubuntu-latest
+    runs-on: custom
     
     outputs:
       resource_paths: ${{ steps.detect-applications.outputs.paths }}

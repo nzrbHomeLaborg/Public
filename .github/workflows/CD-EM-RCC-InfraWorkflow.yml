@@ -35,6 +35,9 @@ jobs:
 
       - name: Detect changed applications
         id: detect
+        outpust:
+          resource_paths: ${{ steps.detect-applications.outputs.paths }}
+          specific_environment: ${{ github.event.inputs.environment }}
         uses: ./.github/actions/detect-changed-applications
         with:
           resource_path: ${{ github.event.inputs.resource_path }}
@@ -46,7 +49,7 @@ jobs:
 
   prepare-matrices:
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.resource_paths != '' }}
+    if: ${{ needs.detect.outputs.resource_paths != '' }}
     runs-on: custom
     outputs:
       dev_matrix: ${{ steps.generate-matrices.outputs.dev_matrix }}

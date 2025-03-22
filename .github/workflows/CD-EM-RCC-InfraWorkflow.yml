@@ -52,21 +52,72 @@ jobs:
           # For pull requests, the action handles this automatically
           
       # Process the detected files to find deployment config changes
-      - name: Extract Deployment Config Changes
-        if: github.event_name != 'workflow_dispatch'
-        id: extract-paths
+      - name: Detect Changed Applications
+        id: detect-applications
+        shell: bash
         run: |
-          CHANGED_PATHS=()
+          # For workflow_dispatch events
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           
-          # Get the list of changed files
-          CHANGED_FILES="${{ steps.changed-files.outputs.changed_files }}"
-          echo "All changed files:"
+          CHANGED_PATHS=()
+          CHANGED_FILES=""
+          
+          # Get the base and head commits for comparison
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # For PR events, compare base to head
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            echo "Getting changed files for PR #$PR_NUMBER"
+            
+            CHANGED_FILES=$(curl -s -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files" | \
+              jq -r '.[].filename')
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            # For push events (including merges to main)
+            echo "Push event detected"
+            
+            # Check if this is a merge commit by counting parents
+            PARENT_COUNT=$(git cat-file -p ${{ github.sha }} | grep -c "^parent ")
+            
+            if [[ $PARENT_COUNT -gt 1 ]]; then
+              echo "Merge commit detected with $PARENT_COUNT parents"
+              
+              # For merge commits, compare the merge base to the current commit
+              # This finds all files that changed between the common ancestor and the current state
+              MERGE_BASE=$(git merge-base ${{ github.event.before }} ${{ github.sha }})
+              echo "Merge base is $MERGE_BASE"
+              
+              CHANGED_FILES=$(git diff --name-only $MERGE_BASE ${{ github.sha }})
+            else
+              # Normal push, get files changed in this commit
+              echo "Regular push detected"
+              CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+              
+              # If no files found, try using the commit range
+              if [[ -z "$CHANGED_FILES" ]]; then
+                echo "No files found with direct comparison, trying commit range..."
+                CHANGED_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }})
+              fi
+            fi
+          else
+            # Fallback for other events
+            echo "Event type: ${{ github.event_name }}"
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "")
+          fi
+          
+          echo "All changed files being considered:"
           echo "$CHANGED_FILES"
           
-          # Filter for deployment config files
           echo "Filtering for deployment config files..."
-          for file in $CHANGED_FILES; do
+          while read -r file; do
+            # Skip empty lines
+            [[ -z "$file" ]] && continue
+            
+            # Check if the file is a deployment config file
             if [[ "$file" == cloud-formation/rcc/*deployment-config.y*ml ]]; then
+              # Extract the resource path
               RESOURCE_PATH=$(dirname "$file")
               echo "  Match found! File: $file, Resource path: $RESOURCE_PATH"
               
@@ -74,7 +125,7 @@ jobs:
                 CHANGED_PATHS+=("$RESOURCE_PATH")
               fi
             fi
-          done
+          done <<< "$CHANGED_FILES"
           
           echo "Detected resource paths: ${CHANGED_PATHS[*]}"
           
@@ -82,49 +133,16 @@ jobs:
           PATHS=$(IFS=,; echo "${CHANGED_PATHS[*]}")
           echo "Final paths output: '$PATHS'"
           echo "paths=$PATHS" >> $GITHUB_OUTPUT
-      
-      # Combine outputs from both potential sources
-      - name: Set Final Resource Paths
-        id: set-final-paths
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            FINAL_PATHS="${{ steps.set-path-from-input.outputs.paths }}"
-          else
-            FINAL_PATHS="${{ steps.extract-paths.outputs.paths }}"
-          fi
           
-          echo "paths=$FINAL_PATHS" >> $GITHUB_OUTPUT
-          echo "Final resource paths to deploy: $FINAL_PATHS"
-      
-      # Continue with your deployment steps conditionally
-      - name: Continue only if paths were detected
-        id: check-paths
-        run: |
-          PATHS="${{ steps.set-final-paths.outputs.paths }}"
+          # Debug info for empty results
           if [[ -z "$PATHS" ]]; then
-            echo "No deployment config files were changed. Skipping deployment."
-            echo "should_continue=false" >> $GITHUB_OUTPUT
-          else
-            echo "Deployment config files were changed. Proceeding with deployment."
-            echo "should_continue=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Check Event Type and Branch
-        id: check-event
-        shell: bash
-        run: |
-          # Check if this is a pull request event
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "is_pull_request=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_pull_request=false" >> $GITHUB_OUTPUT
-          fi
-          
-          # Check if this is on the main branch
-          if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.event.inputs.resource_path }}" != "" ]]; then
-            echo "is_main_branch=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_main_branch=false" >> $GITHUB_OUTPUT
+            echo "No paths detected. Here's some debug information:"
+            echo "Event name: ${{ github.event_name }}"
+            echo "Ref: ${{ github.ref }}"
+            echo "Base ref: ${{ github.event.pull_request.base.ref || 'N/A' }}"
+            echo "SHA: ${{ github.sha }}"
+            echo "Before: ${{ github.event.before || 'N/A' }}"
+            echo "After: ${{ github.event.after || 'N/A' }}"
           fi
   prepare-matrices:
     needs: detect-changes

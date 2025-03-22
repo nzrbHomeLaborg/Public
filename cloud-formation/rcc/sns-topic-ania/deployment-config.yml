@@ -1,5 +1,5 @@
 deployments:
-  - resource: a-crs-sns-ania
+  - resource: a-crs-sns-ania123
     environments:
       - dev
       - int

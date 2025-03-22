@@ -11,9 +11,8 @@ inputs:
     default: ${{ github.token }}
 
   outputs:
-    resource_paths:
-      description: 'Comma-separated list of changed resource paths'
-      value: ${{ steps.detect-applications.outputs.paths }}
+    resource_paths: ${{ steps.detect-applications.outputs.paths }}
+    specific_environment: ${{ github.event.inputs.environment }}
 
 runs:
   using: 'composite'

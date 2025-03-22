@@ -40,9 +40,9 @@ jobs:
           resource_path: ${{ github.event.inputs.resource_path }}
           token: ${{ secrets.GITHUB_TOKEN }}
     
-      - name: Show detected paths
-        run: echo "Detected paths: ${{ steps.detect.outputs.paths }}"
-        
+      # - name: Show detected paths
+      #   run: echo "Detected paths: ${{ steps.detect.outputs.paths }}"
+
   prepare-matrices:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.resource_paths != '' }}

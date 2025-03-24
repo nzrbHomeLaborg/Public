@@ -66,9 +66,31 @@ runs:
           PR_NUMBER="${{ github.event.pull_request.number }}"
           log "Pull request event detected (PR #$PR_NUMBER)"
           
-          CHANGED_FILES=$(curl -s -H "Authorization: token ${{ github.token }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files" | \
-            jq -r '.[].filename')
+          # Save the API response to a file for inspection
+          API_RESPONSE=$(curl -s -H "Authorization: token ${{ github.token }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files")
+          
+          # Log the first part of the response for debugging
+          log "API Response (first 100 chars): ${API_RESPONSE:0:100}"
+          
+          # Check if we got a valid JSON array before processing
+          if echo "$API_RESPONSE" | jq 'if type=="array" then true else false end' | grep -q true; then
+            log "Valid JSON array received"
+            CHANGED_FILES=$(echo "$API_RESPONSE" | jq -r '.[].filename')
+          else
+            log "ERROR: API did not return a JSON array"
+            log "Response type: $(echo "$API_RESPONSE" | jq -r 'type')"
+            
+            # Check if response contains error message
+            if echo "$API_RESPONSE" | jq -e '.message' >/dev/null 2>&1; then
+              ERROR_MSG=$(echo "$API_RESPONSE" | jq -r '.message')
+              log "API Error: $ERROR_MSG"
+            fi
+            
+            # Fallback to git diff as a recovery mechanism
+            log "Falling back to git diff"
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "")
+          fi
           
         elif [[ "$EVENT_NAME" == "push" ]]; then
           log "Push event detected"

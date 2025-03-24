@@ -138,10 +138,13 @@ runs:
 
     - name: Create GitHub Release
       if: ${{ inputs.create-release == 'true' }}
-      uses: softprops/action-gh-release@v1
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       with:
-        tag_name: ${{ inputs.release-tag || format('v{0}', github.run_number) }}
-        name: ${{ inputs.release-name || 'CloudFormation Templates Release' }}
+        tag_name: ${{ inputs.release-tag || github.sha }}
+        release_name: ${{ inputs.release-name || 'CloudFormation Templates Release' }}
         body: |
           CloudFormation templates have been validated, uploaded to S3, and deployed successfully.
           
@@ -150,9 +153,25 @@ runs:
           ${{ inputs.release-notes }}
         draft: ${{ inputs.draft-release == 'true' }}
         prerelease: ${{ inputs.prerelease == 'true' }}
-        files: ${{ inputs.source-folder }}/${{ inputs.template-name }}
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
+
+
+        # - name: Create GitHub Release
+    #   if: ${{ inputs.create-release == 'true' }}
+    #   uses: softprops/action-gh-release@v1
+    #   with:
+    #     tag_name: ${{ inputs.release-tag || format('v{0}', github.run_number) }}
+    #     name: ${{ inputs.release-name || 'CloudFormation Templates Release' }}
+    #     body: |
+    #       CloudFormation templates have been validated, uploaded to S3, and deployed successfully.
+          
+    #       Stack name: ${{ inputs.stack-name }}
+    #       Region: ${{ inputs.aws-region }}
+    #       ${{ inputs.release-notes }}
+    #     draft: ${{ inputs.draft-release == 'true' }}
+    #     prerelease: ${{ inputs.prerelease == 'true' }}
+    #     files: ${{ inputs.source-folder }}/${{ inputs.template-name }}
+    #   env:
+    #     GITHUB_TOKEN: ${{ github.token }}
 
     - name: Upload templates to release
       if: ${{ inputs.create-release == 'true' }}

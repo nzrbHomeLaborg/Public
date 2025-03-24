@@ -106,6 +106,12 @@ jobs:
           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
           cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
+          create-release: ${{ matrix.parameters.create-release }}
+          release-tag: ${{ matrix.parameters.release-tag }}
+          release-name: ${{ matrix.parameters.release-name}}
+          release-notes: ${{ matrix.parameters.release-notes }}
+          draft-release: ${{ matrix.parameters.draft-release }}
+          prerelease: ${{ matrix.parameters.prerelease }}          
 
   deploy-int:
     needs: [prepare-matrices, deploy-dev]
@@ -159,11 +165,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ matrix.aws_region }}
       
       - name: Deploy Stack
         uses: ./.github/actions/deploy-stack

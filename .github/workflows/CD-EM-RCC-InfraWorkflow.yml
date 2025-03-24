@@ -2,7 +2,7 @@ name: CD-EM-RCC-InfraWorkflow
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 on:
   push:

@@ -141,7 +141,7 @@ runs:
       id: create_release
       uses: actions/create-release@v1
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_TOKEN: ${{ github.token }}
       with:
         tag_name: ${{ github.sha }}
         release_name: ${{ inputs.release-name || 'CloudFormation Templates Release' }}
@@ -158,7 +158,7 @@ runs:
       if: ${{ inputs.create-release == 'true' }}
       uses: actions/upload-release-asset@v1
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_TOKEN: ${{ github.token }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ inputs.source-folder }}/${{ inputs.template-name }}

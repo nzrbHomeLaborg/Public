@@ -33,10 +33,10 @@ deployments:
         
         stack-name: a-crs-ecr-dev
         bucket-name: cd-azdo-central-cfn-a-crs-dev-us-east-2
-        target-folder: cloud-formation/rcc/ecr
-        source-folder: cloud-formation/rcc/ecr
+        target-folder: cloud-formation/rcc/sns-topic-34
+        source-folder: cloud-formation/rcc/sns-topic-34
         filename-patterns: "*.yaml"
-        template-name: a-crs-ecr.yaml
+        template-name: template.yaml
         cfnLintEnabled: 'true'
         extraArgs: '--include-checks I --info -i I3013,W2001'
         bucket-upload: "true"

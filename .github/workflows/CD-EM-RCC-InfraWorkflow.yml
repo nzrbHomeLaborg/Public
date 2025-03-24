@@ -112,7 +112,6 @@ jobs:
     if: >-
       ${{ 
         fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null &&
-        needs.detect-changes.outputs.is_pull_request == 'false'
       }}
     runs-on: custom
     strategy:
@@ -153,8 +152,6 @@ jobs:
     if: >-
       ${{ 
         fromJSON(needs.prepare-matrices.outputs.prod_matrix).include[0] != null &&
-        needs.detect-changes.outputs.is_pull_request == 'false' &&
-        needs.detect-changes.outputs.is_main_branch == 'true'
       }}
     runs-on: custom
     strategy:

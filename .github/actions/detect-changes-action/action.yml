@@ -38,194 +38,108 @@ runs:
   using: "composite"
   steps:
     - name: Detect Changed Applications
-    id: detect-applications
-    shell: bash
-    run: |
-      # Function to log messages with a timestamp
-      log() {
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
-      }
-      
-      log "Starting change detection..."
-      
-      # For workflow_dispatch events
-      if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-        log "Workflow dispatch event detected."
-        echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
-        exit 0
-      fi
-      
-      CHANGED_PATHS=()
-      CHANGED_FILES=""
-      
-      # Determine event type and get changed files
-      EVENT_NAME="${{ github.event_name }}"
-      log "Event name: $EVENT_NAME"
-      
-      if [[ "$EVENT_NAME" == "pull_request" ]]; then
-        PR_NUMBER="${{ github.event.pull_request.number }}"
-        log "Pull request event detected (PR #$PR_NUMBER)"
+      id: detect-applications
+      shell: bash
+      run: |
+        # Function to log messages with a timestamp
+        log() {
+          echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
+        }
         
-        # Fetch the list of changed files from the GitHub API
-        API_URL="https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files"
-        log "Fetching changed files from: $API_URL"
+        log "Starting change detection..."
         
-        CURL_OUTPUT=$(curl -s -H "Authorization: token ${{ github.token }}" "$API_URL")
-        CURL_EXIT_CODE=$?
-        
-        if [[ $CURL_EXIT_CODE -ne 0 ]]; then
-          log "Error fetching changed files (curl exit code: $CURL_EXIT_CODE)"
-          log "CURL Output: $CURL_OUTPUT"
-          exit 1
+        # For workflow_dispatch events
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          log "Workflow dispatch event detected."
+          echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
+          exit 0
         fi
         
-        # Extract the filenames using jq
-        CHANGED_FILES=$(echo "$CURL_OUTPUT" | jq -r '.[].filename')
-        JQ_EXIT_CODE=$?
+        CHANGED_PATHS=()
+        CHANGED_FILES=""
         
-        if [[ $JQ_EXIT_CODE -ne 0 ]]; then
-          log "Error parsing changed files with jq (jq exit code: $JQ_EXIT_CODE)"
-          log "CURL Output (for jq): $CURL_OUTPUT"
-          exit 1
+        # Determine event type and get changed files
+        EVENT_NAME="${{ github.event_name }}"
+        log "Event name: $EVENT_NAME"
+        
+        if [[ "$EVENT_NAME" == "pull_request" ]]; then
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          log "Pull request event detected (PR #$PR_NUMBER)"
+          
+          CHANGED_FILES=$(curl -s -H "Authorization: token ${{ github.token }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files" | \
+            jq -r '.[].filename')
+          
+        elif [[ "$EVENT_NAME" == "push" ]]; then
+          log "Push event detected"
+          
+          PARENT_COUNT=$(git cat-file -p ${{ github.sha }} | grep -c "^parent ")
+          
+          if [[ $PARENT_COUNT -gt 1 ]]; then
+            log "Merge commit detected with $PARENT_COUNT parents"
+            
+            MERGE_BASE=$(git merge-base ${{ github.event.before }} ${{ github.sha }})
+            log "Merge base: $MERGE_BASE"
+            
+            CHANGED_FILES=$(git diff --name-only $MERGE_BASE ${{ github.sha }})
+          else
+            log "Regular push detected"
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+            
+            if [[ -z "$CHANGED_FILES" ]]; then
+              log "No files found with direct comparison, trying commit range..."
+              CHANGED_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }})
+            fi
+          fi
+        else
+          log "Event type: $EVENT_NAME (fallback)"
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "")
         fi
-      elif [[ "$EVENT_NAME" == "push" ]]; then
-      # ...existing code...
-      else
-      # ...existing code...
-      fi
-      
-      log "All changed files being considered:"
-      echo "$CHANGED_FILES"
-      
-      log "Filtering for deployment config files..."
-      
-      while IFS= read -r file; do
-      # ...existing code...
-      done <<< "$CHANGED_FILES"
-      
-      log "Detected resource paths: ${CHANGED_PATHS[*]}"
-      
-      # Convert array to comma-separated string
-      if [[ ${#CHANGED_PATHS[@]} -gt 0 ]]; then
-      # ...existing code...
-      else
-      # ...existing code...
-      fi
-      
-      log "Final paths output: '$PATHS'"
-      echo "paths=$PATHS" >> $GITHUB_OUTPUT
-      
-      # Debug info for empty results
-      if [[ -z "$PATHS" ]]; then
-      # ...existing code...
-      fi
-      
-      log "Change detection complete."
-
-
-    # - name: Detect Changed Applications
-    #   id: detect-applications
-    #   shell: bash
-    #   run: |
-    #     # Function to log messages with a timestamp
-    #     log() {
-    #       echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
-    #     }
         
-    #     log "Starting change detection..."
+        log "All changed files being considered:"
+        echo "$CHANGED_FILES"
         
-    #     # For workflow_dispatch events
-    #     if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-    #       log "Workflow dispatch event detected."
-    #       echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
-    #       exit 0
-    #     fi
+        log "Filtering for deployment config files..."
         
-    #     CHANGED_PATHS=()
-    #     CHANGED_FILES=""
+        while IFS= read -r file; do
+          # Skip empty lines
+          if [[ -z "$file" ]]; then
+            continue
+          fi
         
-    #     # Determine event type and get changed files
-    #     EVENT_NAME="${{ github.event_name }}"
-    #     log "Event name: $EVENT_NAME"
+          # Check if the file is a deployment config file
+          if [[ "$file" == cloud-formation/rcc/*deployment-config.y*ml ]]; then
+            RESOURCE_PATH=$(dirname "$file")
+            log "Match found! File: $file, Resource path: $RESOURCE_PATH"
         
-    #     if [[ "$EVENT_NAME" == "pull_request" ]]; then
-    #       PR_NUMBER="${{ github.event.pull_request.number }}"
-    #       log "Pull request event detected (PR #$PR_NUMBER)"
-          
-    #       CHANGED_FILES=$(curl -s -H "Authorization: token ${{ github.token }}" \
-    #         "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files" | \
-    #         jq -r '.[].filename')
-          
-    #     elif [[ "$EVENT_NAME" == "push" ]]; then
-    #       log "Push event detected"
-          
-    #       PARENT_COUNT=$(git cat-file -p ${{ github.sha }} | grep -c "^parent ")
-          
-    #       if [[ $PARENT_COUNT -gt 1 ]]; then
-    #         log "Merge commit detected with $PARENT_COUNT parents"
-            
-    #         MERGE_BASE=$(git merge-base ${{ github.event.before }} ${{ github.sha }})
-    #         log "Merge base: $MERGE_BASE"
-            
-    #         CHANGED_FILES=$(git diff --name-only $MERGE_BASE ${{ github.sha }})
-    #       else
-    #         log "Regular push detected"
-    #         CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
-            
-    #         if [[ -z "$CHANGED_FILES" ]]; then
-    #           log "No files found with direct comparison, trying commit range..."
-    #           CHANGED_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }})
-    #         fi
-    #       fi
-    #     else
-    #       log "Event type: $EVENT_NAME (fallback)"
-    #       CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "")
-    #     fi
+            if [[ ! " ${CHANGED_PATHS[@]} " =~ " ${RESOURCE_PATH} " ]]; then
+              CHANGED_PATHS+=("$RESOURCE_PATH")
+            fi
+          fi
+        done <<< "$CHANGED_FILES"
         
-    #     log "All changed files being considered:"
-    #     echo "$CHANGED_FILES"
+        log "Detected resource paths: ${CHANGED_PATHS[*]}"
         
-    #     log "Filtering for deployment config files..."
+        # Convert array to comma-separated string
+        if [[ ${#CHANGED_PATHS[@]} -gt 0 ]]; then
+          IFS=,
+          PATHS="${CHANGED_PATHS[*]}"
+        else
+          PATHS=""
+        fi
         
-    #     while IFS= read -r file; do
-    #       # Skip empty lines
-    #       if [[ -z "$file" ]]; then
-    #         continue
-    #       fi
+        log "Final paths output: '$PATHS'"
+        echo "paths=$PATHS" >> $GITHUB_OUTPUT
         
-    #       # Check if the file is a deployment config file
-    #       if [[ "$file" == cloud-formation/rcc/*deployment-config.y*ml ]]; then
-    #         RESOURCE_PATH=$(dirname "$file")
-    #         log "Match found! File: $file, Resource path: $RESOURCE_PATH"
+        # Debug info for empty results
+        if [[ -z "$PATHS" ]]; then
+          log "No paths detected. Debug information:"
+          log "Event name: $EVENT_NAME"
+          log "Ref: ${{ github.ref }}"
+          log "Base ref: ${{ github.event.pull_request.base.ref || 'N/A' }}"
+          log "SHA: ${{ github.sha }}"
+          log "Before: ${{ github.event.before || 'N/A' }}"
+          log "After: ${{ github.event.after || 'N/A' }}"
+        fi
         
-    #         if [[ ! " ${CHANGED_PATHS[@]} " =~ " ${RESOURCE_PATH} " ]]; then
-    #           CHANGED_PATHS+=("$RESOURCE_PATH")
-    #         fi
-    #       fi
-    #     done <<< "$CHANGED_FILES"
-        
-    #     log "Detected resource paths: ${CHANGED_PATHS[*]}"
-        
-    #     # Convert array to comma-separated string
-    #     if [[ ${#CHANGED_PATHS[@]} -gt 0 ]]; then
-    #       IFS=,
-    #       PATHS="${CHANGED_PATHS[*]}"
-    #     else
-    #       PATHS=""
-    #     fi
-        
-    #     log "Final paths output: '$PATHS'"
-    #     echo "paths=$PATHS" >> $GITHUB_OUTPUT
-        
-    #     # Debug info for empty results
-    #     if [[ -z "$PATHS" ]]; then
-    #       log "No paths detected. Debug information:"
-    #       log "Event name: $EVENT_NAME"
-    #       log "Ref: ${{ github.ref }}"
-    #       log "Base ref: ${{ github.event.pull_request.base.ref || 'N/A' }}"
-    #       log "SHA: ${{ github.sha }}"
-    #       log "Before: ${{ github.event.before || 'N/A' }}"
-    #       log "After: ${{ github.event.after || 'N/A' }}"
-    #     fi
-        
-    #     log "Change detection complete."
+        log "Change detection complete."

@@ -111,7 +111,8 @@ jobs:
           release-name: ${{ matrix.parameters.release-name}}
           release-notes: ${{ matrix.parameters.release-notes }}
           draft-release: ${{ matrix.parameters.draft-release }}
-          prerelease: ${{ matrix.parameters.prerelease }}          
+          prerelease: ${{ matrix.parameters.prerelease }}
+          github_token: ${{ github.token }}     
 
   deploy-int:
     needs: [prepare-matrices, deploy-dev]

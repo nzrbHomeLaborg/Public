@@ -194,3 +194,10 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
           iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
+          ##----------releases-----------------
+          create-release: ${{ matrix.parameters.create-release }}
+          release-tag: ${{ matrix.parameters.release-tag }}
+          release-name: ${{ matrix.parameters.release-name}}
+          release-notes: ${{ matrix.parameters.release-notes }}
+          draft-release: ${{ matrix.parameters.draft-release }}
+          prerelease: ${{ matrix.parameters.prerelease }}

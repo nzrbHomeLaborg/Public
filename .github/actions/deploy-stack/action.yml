@@ -63,6 +63,33 @@ inputs:
     description: 'IAM execution role ARN'
     required: false
     default: ''
+  github-token:
+    description: 'GitHub token for creating releases'
+    required: true
+  create-release:
+    description: 'Whether to create a GitHub release after deployment'
+    required: false
+    default: 'false'
+  release-tag:
+    description: 'Tag name for the release'
+    required: false
+  release-name:
+    description: 'Name of the release'
+    required: false
+  release-notes:
+    description: 'Additional notes to include in the release description'
+    required: false
+  draft-release:
+    description: 'Whether the release should be a draft'
+    required: false
+    default: 'false'
+  prerelease:
+    description: 'Whether the release should be marked as a pre-release'
+    required: false
+    default: 'false'
+
+
+
 
 runs:
   using: "composite"
@@ -108,3 +135,32 @@ runs:
         echo "  - aws-role-to-assume: ${{ inputs.aws-role-to-assume }}"
         echo "  - cfn-role-arn: ${{ inputs.cfn-role-arn }}"
         echo "  - iam-execution-role-arn: ${{ inputs.iam-execution-role-arn }}"
+
+      - name: Create GitHub Release
+        if: ${{ inputs.create-release == 'true' }}
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ inputs.github-token }}
+        with:
+          tag_name: ${{ inputs.release-tag || format('v{0}', github.run_number) }}
+          release_name: ${{ inputs.release-name || 'CloudFormation Templates Release' }}
+          body: |
+            CloudFormation templates have been validated, uploaded to S3, and deployed successfully.
+            
+            Stack name: ${{ inputs.stack-name }}
+            Region: ${{ inputs.aws-region }}
+            ${{ inputs.release-notes }}
+          draft: ${{ inputs.draft-release == 'true' }}
+          prerelease: ${{ inputs.prerelease == 'true' }}
+  
+      - name: Upload templates to release
+        if: ${{ inputs.create-release == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ inputs.github-token }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ inputs.source-folder }}/${{ inputs.template-name }}
+          asset_name: ${{ inputs.template-name }}
+          asset_content_type: application/zip    

@@ -143,7 +143,7 @@ runs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
       with:
-        tag_name: ${{ github.sha }}
+        tag_name: ${{ inputs.release-tag || format('v{0}', github.run_number) }}
         release_name: ${{ inputs.release-name || 'CloudFormation Templates Release' }}
         body: |
           CloudFormation templates have been validated, uploaded to S3, and deployed successfully.

@@ -47,7 +47,7 @@ deployments:
         create-release: true
         release-name: "rcc-se-bucket-releases"
         release-notes: "this is tes releases"
-        release-tag: 1.0
+        release-tag: test
         draft-release: false
         prerelease: false 
 

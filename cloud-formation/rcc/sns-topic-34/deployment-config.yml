@@ -3,24 +3,31 @@ deployments:
     environments:
       - dev
       - int
+      - prod
     runners:
       dev: custom
       int: custom
+      prod: custom
     github_environments:
       dev: CD-EM-CRS-DEV
       int: CD-EM-CRS-DEV
+      prod: CD-EM-CRS-DEV
     aws_regions:
       dev: us-east-1
-      int: us-east-2
+      int: us-east-1
+      prod: us-east-1
     aws_role_secrets:
       dev: AWS_ROLE_TO_ASSUME
-      int: AWS_ROLE_TO_ASSUME # Ім'я секрету для AWS ролі в середовищі DEV
+      int: AWS_ROLE_TO_ASSUME
+      prod: AWS_ROLE_TO_ASSUME   # Ім'я секрету для AWS ролі в середовищі DEV
     cfn_role_secrets:
       dev: AWS_ROLE_TO_ASSUME
-      int: AWS_ROLE_TO_ASSUME  # Ім'я секрету для CloudFormation ролі в DEV
+      int: AWS_ROLE_TO_ASSUME
+      prod: AWS_ROLE_TO_ASSUME    # Ім'я секрету для CloudFormation ролі в DEV
     iam_execution_role_secrets:
       dev: AWS_ROLE_TO_ASSUME 
-      int: AWS_ROLE_TO_ASSUME    
+      int: AWS_ROLE_TO_ASSUME
+      prod: AWS_ROLE_TO_ASSUME  
     parameters:
       dev:
         
@@ -51,7 +58,26 @@ deployments:
             - ParameterKey: ECRName
               ParameterValue: a-crs-ecr-dev
           tags: Name=a-crs-s3-bucket-dev
-  
+      prod:
+        stack-name: a-crs-ecr-dev
+        bucket-name: cd-azdo-central-cfn-a-crs-dev-us-east-2
+        target-folder: cloud-formation/rcc/ecr
+        source-folder: cloud-formation/rcc/ecr
+        filename-patterns: "*.yaml"
+        template-name: a-crs-ecr.yaml
+        cfnLintEnabled: 'true'
+        extraArgs: '--include-checks I --info -i I3013,W2001'
+        bucket-upload: "true"
+        inline-parameters:
+          - ParameterKey: ECRName
+            ParameterValue: a-crs-ecr-dev
+        tags: Name=a-crs-s3-bucket12312
+        create-release: true
+        release-tag: 1.0
+        release-name: "rcc-se-bucket-releases"
+        release-notes: "this is tes releases"
+        draft-release: false
+        prerelease: false 
 
 
         

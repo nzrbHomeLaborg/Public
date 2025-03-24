@@ -2,17 +2,34 @@ deployments:
   - resource: a-crs-s3-bucket-test123
     environments:
       - dev
+      - int
+      - prod
+
     runners:
-      dev: ubuntu-latest    
+      dev: custom
+      int: custom 
+      prod: custom 
     github_environments:
       dev: CD-EM-CRS-DEV
+      int: CD-EM-CRS-DEV
+      prod: CD-EM-CRS-DEV
     aws_regions:
       dev: us-east-1
+      int: us-east-1
+      prod: us-east-1
     aws_roles:
       dev:
         aws_role_to_assume: AWS_CRS_ROLE_TO_ASSUME
         cfn_role_arn: CFN_ROLE_ARN
         iam_execution_role_arn: AWS_CRS_ROLE_TO_ASSUME
+      int:
+        aws_role_to_assume: AWS_CRS_ROLE_TO_ASSUME
+        cfn_role_arn: CFN_ROLE_ARN
+        iam_execution_role_arn: AWS_CRS_ROLE_TO_ASSUME
+      prod:
+        aws_role_to_assume: AWS_CRS_ROLE_TO_ASSUME
+        cfn_role_arn: CFN_ROLE_ARN
+        iam_execution_role_arn: AWS_CRS_ROLE_TO_ASSUME                  
     parameters:
       dev:
         stack-name: a-crs-ecr-dev

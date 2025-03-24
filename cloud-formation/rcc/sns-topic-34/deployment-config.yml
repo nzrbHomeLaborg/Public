@@ -45,7 +45,6 @@ deployments:
             ParameterValue: a-crs-ecr-dev
         tags: Name=a-crs-s3-bucket-dev-twt123-123
         create-release: true
-        release-tag: ${{ github.sha }}
         release-name: "rcc-se-bucket-releases"
         release-notes: "this is tes releases"
         draft-release: false

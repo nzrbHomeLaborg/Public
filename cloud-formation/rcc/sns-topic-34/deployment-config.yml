@@ -44,6 +44,13 @@ deployments:
           - ParameterKey: ECRName
             ParameterValue: a-crs-ecr-dev
         tags: Name=a-crs-s3-bucket-dev-twt123-123
+        create-release: true
+        release-tag: 1.0
+        release-name: "rcc-se-bucket-releases"
+        release-notes: "this is tes releases"
+        draft-release: false
+        prerelease: false 
+
       int:
           stack-name: a-crs-ecr-int
           bucket-name: cd-azdo-central-cfn-a-crs-dev-us-east-2

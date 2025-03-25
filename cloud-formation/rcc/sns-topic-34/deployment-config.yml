@@ -1,5 +1,4 @@
 deployments:
-  - resource: a-crs-sns-ani
   - environments:
       - dev
       - int

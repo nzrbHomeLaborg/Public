@@ -52,6 +52,7 @@ deployments:
         template-name: "template.yaml"
         filename-patterns: "*.yaml"
         cfnLintEnabled: "true"
+        tags: Name=nazar-stack-dev
         extraArgs: "--capabilities CAPABILITY_IAM"
         parameter-file: "parameters/dev.json"
         inline-parameters:

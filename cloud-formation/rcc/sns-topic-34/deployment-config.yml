@@ -1,4 +1,5 @@
 deployments:
+  - resource: a-crs-sns-ani
   - environments:
       - dev
       - int
@@ -88,6 +89,7 @@ deployments:
           Stage: "production"
         tags: "Environment=prod,Project=MyApp"
       stg: 
+        dependsOn: deploy-int
         stack-name: "stg-app-stack"
         bucket-name: "stg-app-bucket"
         bucket-upload: "true"
@@ -105,6 +107,7 @@ deployments:
         # Ця опція вказує, що це середовище повинно додаватися до матриці custom deployment
         custom_deployment: "true"
       int-dr:
+        dependsOn: deploy-prod
         stack-name: "int-dr-app-stack"
         bucket-name: "int-dr-app-bucket"
         bucket-upload: "true"

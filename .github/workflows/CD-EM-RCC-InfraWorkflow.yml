@@ -58,6 +58,7 @@ jobs:
       dev_matrix: ${{ steps.generate-matrices.outputs.dev_matrix }}
       int_matrix: ${{ steps.generate-matrices.outputs.int_matrix }}
       prod_matrix: ${{ steps.generate-matrices.outputs.prod_matrix }}
+      custom_matrix: ${{ steps.generate-matrices.outputs.custom_matrix }}
     
     steps:
       - name: Checkout repository
@@ -85,6 +86,84 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      - name: Deploy Stack
+        uses: ./.github/actions/deploy-stack
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+          cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
+          iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
+          # create-release: ${{ matrix.parameters.create-release }}
+          # release-tag: ${{ matrix.parameters.release-tag }}
+          # release-name: ${{ matrix.parameters.release-name}}
+          # release-notes: ${{ matrix.parameters.release-notes }}
+          # draft-release: ${{ matrix.parameters.draft-release }}
+          # prerelease: ${{ matrix.parameters.prerelease }}
+          # github_token: ${{ github.token }}     
+
+  deploy-int:
+    needs: [prepare-matrices, deploy-dev]
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
+    
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Deploy Stack
+        uses: ./.github/actions/deploy-stack
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+          cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
+          iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
+
+  deploy-custom:
+    needs: [prepare-matrices, deploy-dev]
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
+    
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to ${{ matrix.environment }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       
       - name: Deploy Stack
         uses: ./.github/actions/deploy-stack
@@ -106,55 +185,12 @@ jobs:
           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
           cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
-          create-release: ${{ matrix.parameters.create-release }}
-          release-tag: ${{ matrix.parameters.release-tag }}
-          release-name: ${{ matrix.parameters.release-name}}
-          release-notes: ${{ matrix.parameters.release-notes }}
-          draft-release: ${{ matrix.parameters.draft-release }}
-          prerelease: ${{ matrix.parameters.prerelease }}
-          github_token: ${{ github.token }}     
 
-  deploy-int:
-    needs: [prepare-matrices, deploy-dev]
-    if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
-    runs-on: custom
-    strategy:
-      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
-      fail-fast: false
-    environment: ${{ matrix.github_environment }}
-    
-    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      
-      - name: Deploy Stack
-        uses: ./.github/actions/deploy-stack
-        with:
-          environment: ${{ matrix.environment }}
-          stack-name: ${{ matrix.parameters.stack-name }}
-          bucket-name: ${{ matrix.parameters.bucket-name }}
-          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
-          target-folder: ${{ matrix.parameters.target-folder }}
-          source-folder: ${{ matrix.parameters.source-folder }}
-          template-name: ${{ matrix.parameters.template-name }}
-          filename-patterns: ${{ matrix.parameters.filename-patterns }}
-          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
-          extraArgs: ${{ matrix.parameters.extraArgs }}          
-          parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
-          tags: ${{ matrix.parameters.tags }}
-          aws-region: ${{ matrix.aws_region }}
-          aws-role-to-assume: ${{ secrets[matrix.aws_role_secre] }}
-          cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
-          iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
 
   deploy-prod:
     needs: [prepare-matrices, deploy-int]
     if: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix).include[0] != null }}
-    runs-on: custom
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix) }}
       fail-fast: false
@@ -165,7 +201,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
       
       - name: Deploy Stack
         uses: ./.github/actions/deploy-stack
@@ -187,10 +222,202 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
           iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
-          ##----------releases-----------------
-          create-release: ${{ matrix.parameters.create-release }}
-          release-tag: ${{ matrix.parameters.release-tag }}
-          release-name: ${{ matrix.parameters.release-name}}
-          release-notes: ${{ matrix.parameters.release-notes }}
-          draft-release: ${{ matrix.parameters.draft-release }}
-          prerelease: ${{ matrix.parameters.prerelease }}
+
+
+
+# name: CD-EM-RCC-InfraWorkflow
+
+# permissions:
+#   id-token: write
+#   contents: write
+
+# on:
+#   push:
+#     branches: [main]   
+#   pull_request:
+#     branches: [develop]
+#   workflow_dispatch:
+#     inputs:
+#       resource_path:
+#         description: 'Resource path (e.g., cloud-formation/rcc/a-crs-spa)'
+#         required: true
+#         type: string
+#       environment:
+#         description: 'Specific environment (leave empty for all)'
+#         required: false
+#         type: string
+
+# jobs:
+#   detect-changes:
+#     runs-on: custom
+#     outputs:
+#       resource_paths: ${{ steps.detect-changes-action.outputs.paths }}
+#       specific_environment: ${{ github.event.inputs.environment }}
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+
+#       - name: Detect Changed Applications
+#         id: detect-changes-action
+#         uses: ./.github/actions/detect-changes-action
+#         with:
+#           github_token: ${{ github.token }}
+#           event_name: ${{ github.event_name }}
+#           github_sha: ${{ github.sha }}
+#           github_ref: ${{ github.ref }}
+#           event_before: ${{ github.event.before || '' }}
+#           pull_request_number: ${{ github.event.pull_request.number || '' }}
+#           resource_path_input: ${{ github.event.inputs.resource_path || '' }}
+#           repository: ${{ github.repository }}
+      
+#       - name: Show detected paths
+#         shell: bash
+#         run: |
+#           echo "Detected paths: ${{ steps.detect-changes-action.outputs.resource_paths }}"
+        
+#   prepare-matrices:
+#     needs: detect-changes
+#     if: ${{ needs.detect-changes.outputs.resource_paths != '' }}
+#     runs-on: custom
+#     outputs:
+#       dev_matrix: ${{ steps.generate-matrices.outputs.dev_matrix }}
+#       int_matrix: ${{ steps.generate-matrices.outputs.int_matrix }}
+#       prod_matrix: ${{ steps.generate-matrices.outputs.prod_matrix }}
+    
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+      
+#       - name: Generate Combined Deployment Matrices
+#         id: generate-matrices
+#         uses: ./.github/actions/combined-matrix-generator
+#         with:
+#           resource_paths: ${{ needs.detect-changes.outputs.resource_paths }}
+#           specific_environment: ${{ needs.detect-changes.outputs.specific_environment }}
+
+#   deploy-dev:
+#     needs: prepare-matrices
+#     if: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null }}
+#     runs-on: ${{ matrix.runner }}
+#     strategy:
+#       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix) }}
+#       fail-fast: false
+#     environment: ${{ matrix.github_environment }}
+    
+#     name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to DEV
+    
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+      
+      
+#       - name: Deploy Stack
+#         uses: ./.github/actions/deploy-stack
+#         with:
+#           environment: ${{ matrix.environment }}
+#           stack-name: ${{ matrix.parameters.stack-name }}
+#           bucket-name: ${{ matrix.parameters.bucket-name }}
+#           upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+#           target-folder: ${{ matrix.parameters.target-folder }}
+#           source-folder: ${{ matrix.parameters.source-folder }}
+#           template-name: ${{ matrix.parameters.template-name }}
+#           filename-patterns: ${{ matrix.parameters.filename-patterns }}
+#           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+#           extraArgs: ${{ matrix.parameters.extraArgs }}          
+#           parameter-file: ${{ matrix.parameters.parameter-file }}
+#           inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+#           tags: ${{ matrix.parameters.tags }}
+#           aws-region: ${{ matrix.aws_region }}
+#           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+#           cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
+#           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
+#           create-release: ${{ matrix.parameters.create-release }}
+#           release-tag: ${{ matrix.parameters.release-tag }}
+#           release-name: ${{ matrix.parameters.release-name}}
+#           release-notes: ${{ matrix.parameters.release-notes }}
+#           draft-release: ${{ matrix.parameters.draft-release }}
+#           prerelease: ${{ matrix.parameters.prerelease }}
+#           github_token: ${{ github.token }}     
+
+#   deploy-int:
+#     needs: [prepare-matrices, deploy-dev]
+#     if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
+#     runs-on: custom
+#     strategy:
+#       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
+#       fail-fast: false
+#     environment: ${{ matrix.github_environment }}
+    
+#     name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
+    
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+      
+      
+#       - name: Deploy Stack
+#         uses: ./.github/actions/deploy-stack
+#         with:
+#           environment: ${{ matrix.environment }}
+#           stack-name: ${{ matrix.parameters.stack-name }}
+#           bucket-name: ${{ matrix.parameters.bucket-name }}
+#           upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+#           target-folder: ${{ matrix.parameters.target-folder }}
+#           source-folder: ${{ matrix.parameters.source-folder }}
+#           template-name: ${{ matrix.parameters.template-name }}
+#           filename-patterns: ${{ matrix.parameters.filename-patterns }}
+#           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+#           extraArgs: ${{ matrix.parameters.extraArgs }}          
+#           parameter-file: ${{ matrix.parameters.parameter-file }}
+#           inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+#           tags: ${{ matrix.parameters.tags }}
+#           aws-region: ${{ matrix.aws_region }}
+#           aws-role-to-assume: ${{ secrets[matrix.aws_role_secre] }}
+#           cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
+#           iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
+
+#   deploy-prod:
+#     needs: [prepare-matrices, deploy-int]
+#     if: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix).include[0] != null }}
+#     runs-on: custom
+#     strategy:
+#       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix) }}
+#       fail-fast: false
+#     environment: ${{ matrix.github_environment }}
+    
+#     name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to PROD
+    
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+      
+      
+#       - name: Deploy Stack
+#         uses: ./.github/actions/deploy-stack
+#         with:
+#           environment: ${{ matrix.environment }}
+#           stack-name: ${{ matrix.parameters.stack-name }}
+#           bucket-name: ${{ matrix.parameters.bucket-name }}
+#           upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+#           target-folder: ${{ matrix.parameters.target-folder }}
+#           source-folder: ${{ matrix.parameters.source-folder }}
+#           template-name: ${{ matrix.parameters.template-name }}
+#           filename-patterns: ${{ matrix.parameters.filename-patterns }}
+#           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+#           extraArgs: ${{ matrix.parameters.extraArgs }}          
+#           parameter-file: ${{ matrix.parameters.parameter-file }}
+#           inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+#           tags: ${{ matrix.parameters.tags }}
+#           aws-region: ${{ matrix.aws_region }}
+#           aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+#           cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
+#           iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
+#           ##----------releases-----------------
+#           create-release: ${{ matrix.parameters.create-release }}
+#           release-tag: ${{ matrix.parameters.release-tag }}
+#           release-name: ${{ matrix.parameters.release-name}}
+#           release-notes: ${{ matrix.parameters.release-notes }}
+#           draft-release: ${{ matrix.parameters.draft-release }}
+#           prerelease: ${{ matrix.parameters.prerelease }}

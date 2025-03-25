@@ -19,6 +19,9 @@ outputs:
   prod_matrix:
     description: 'Matrix for PROD deployments'
     value: ${{ steps.generate-matrices.outputs.prod_matrix }}
+  custom_matrix:
+    description: 'Matrix for custom deployments (stg, int-dr, etc)'
+    value: ${{ steps.generate-matrices.outputs.custom_matrix }}
 
 runs:
   using: "composite"
@@ -44,6 +47,7 @@ runs:
         DEV_MATRIX_ITEMS=()
         INT_MATRIX_ITEMS=()
         PROD_MATRIX_ITEMS=()
+        CUSTOM_MATRIX_ITEMS=()
         
         # Split input resource paths by comma
         IFS=',' read -ra RESOURCE_PATHS <<< "${{ inputs.resource_paths }}"
@@ -111,7 +115,10 @@ runs:
             CFN_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].cfn_role_secrets[$env] // "CFN_ROLE_ARN"')
             IAM_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].iam_execution_role_secrets[$env] // "IAM_EXECUTION_ROLE_ARN"')
             
-                        
+            # Check if custom deployment is enabled for this environment
+            CUSTOM_DEPLOYMENT=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].custom_deployment // "false"')
+            echo "Custom deployment for $ENV: $CUSTOM_DEPLOYMENT"
+            
             # Skip if any required field is empty
             if [[ -z "$PARAMS" || "$PARAMS" == "null" || -z "$RUNNER" || "$RUNNER" == "null" || 
                   -z "$GH_ENV" || "$GH_ENV" == "null" || -z "$AWS_REGION" || "$AWS_REGION" == "null" ]]; then
@@ -122,7 +129,6 @@ runs:
             # Create matrix item (all on one line)
             MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"parameters\":$PARAMS}"
 
-            
             # Add to appropriate matrix based on environment
             if [[ "$ENV" == "dev" ]]; then
               DEV_MATRIX_ITEMS+=("$MATRIX_ITEM")
@@ -130,6 +136,11 @@ runs:
               INT_MATRIX_ITEMS+=("$MATRIX_ITEM")
             elif [[ "$ENV" == "prod" ]]; then
               PROD_MATRIX_ITEMS+=("$MATRIX_ITEM")
+            fi
+            
+            # Add to custom deployment matrix if enabled
+            if [[ "$CUSTOM_DEPLOYMENT" == "true" ]]; then
+              CUSTOM_MATRIX_ITEMS+=("$MATRIX_ITEM")
             fi
           done
         done
@@ -153,10 +164,17 @@ runs:
           PROD_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${PROD_MATRIX_ITEMS[*]}")]}";
         fi
         
+        if [ ${#CUSTOM_MATRIX_ITEMS[@]} -eq 0 ]; then
+          CUSTOM_MATRIX_JSON="{\"include\":[]}"
+        else
+          CUSTOM_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${CUSTOM_MATRIX_ITEMS[*]}")]}";
+        fi
+        
         # Verify JSON is valid
         echo "$DEV_MATRIX_JSON" | jq . > /dev/null 2>&1
         echo "$INT_MATRIX_JSON" | jq . > /dev/null 2>&1
         echo "$PROD_MATRIX_JSON" | jq . > /dev/null 2>&1
+        echo "$CUSTOM_MATRIX_JSON" | jq . > /dev/null 2>&1
         
         # Write matrices to outputs
         echo "dev_matrix<<EOF" >> $GITHUB_OUTPUT
@@ -169,4 +187,8 @@ runs:
         
         echo "prod_matrix<<EOF" >> $GITHUB_OUTPUT
         echo "$PROD_MATRIX_JSON" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "custom_matrix<<EOF" >> $GITHUB_OUTPUT
+        echo "$CUSTOM_MATRIX_JSON" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT

@@ -104,4 +104,4 @@ deployments:
           Environment: "stg"
           Stage: "staging"
         tags: "Environment=stg,Project=MyApp"
-        custom_deployment: "true"
+        custom_deployment: "false"

@@ -88,3 +88,20 @@ deployments:
           Environment: "prod"
           Stage: "production"
         tags: "Environment=prod,Project=MyApp"
+      stg: 
+        dependsOn: deploy-int
+        stack-name: "stg-app-stack"
+        bucket-name: "stg-app-bucket"
+        bucket-upload: "true"
+        target-folder: "stg"
+        source-folder: "src"
+        template-name: "template.yaml"
+        filename-patterns: "*.yaml"
+        cfnLintEnabled: "true"
+        extraArgs: "--capabilities CAPABILITY_IAM"
+        parameter-file: "parameters/stg.json"
+        inline-parameters:
+          Environment: "stg"
+          Stage: "staging"
+        tags: "Environment=stg,Project=MyApp"
+        custom_deployment: "true"

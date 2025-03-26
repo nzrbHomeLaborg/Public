@@ -47,8 +47,7 @@ deployments:
         source-folder: cloud-formation/rcc/sns-topic-34
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
-        inline-parameters:
-          - ParameterKey: TopicName
-            ParameterValue: a-crs-CloudWatch-Alarms-int
-        parameter-file: cloud-formation/rcc/sns-topic-34/int.json 
+        # inline-parameters:
+        #   - ParameterKey: TopicName
+        #     ParameterValue: a-crs-CloudWatch-Alarms-int
           

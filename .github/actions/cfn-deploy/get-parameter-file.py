@@ -42,10 +42,35 @@ def main():
             file_parameters = read_from_local(local_path)
         
         if file_parameters:
+            # Обробляємо секрети в параметрах з файлу
             if isinstance(file_parameters, list):
+                # Для формату списку об'єктів з ParameterKey/ParameterValue
+                for param in file_parameters:
+                    if isinstance(param.get("ParameterValue"), str) and param["ParameterValue"].startswith("SECRET:"):
+                        secret_name = param["ParameterValue"].replace("SECRET:", "")
+                        if secret_name in github_secrets:
+                            logger.info(f"{GREEN}Replacing SECRET:{secret_name} in parameter file with actual secret value{RESET}")
+                            param["ParameterValue"] = github_secrets[secret_name]
+                        else:
+                            logger.warning(f"{YELLOW}Secret {secret_name} not found in available secrets{RESET}")
                 combined_parameters = file_parameters
             else:
+                # Для формату словника key:value
+                parameter_dict = {}
                 for key, value in file_parameters.items():
+                    if isinstance(value, str) and value.startswith("SECRET:"):
+                        secret_name = value.replace("SECRET:", "")
+                        if secret_name in github_secrets:
+                            logger.info(f"{GREEN}Replacing SECRET:{secret_name} in parameter file with actual secret value{RESET}")
+                            parameter_dict[key] = github_secrets[secret_name]
+                        else:
+                            logger.warning(f"{YELLOW}Secret {secret_name} not found in available secrets{RESET}")
+                            parameter_dict[key] = value
+                    else:
+                        parameter_dict[key] = value
+                        
+                # Конвертуємо у формат списку для CloudFormation
+                for key, value in parameter_dict.items():
                     combined_parameters.append({
                         "ParameterKey": key,
                         "ParameterValue": value

@@ -1,6 +1,6 @@
 [
     {
       "ParameterKey": "email",
-      "ParameterValue": ""
+      "ParameterValue": "${{ NZRB }}"
     }
   ]

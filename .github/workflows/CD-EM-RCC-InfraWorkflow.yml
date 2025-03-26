@@ -86,13 +86,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
      
-        - name: Set up secrets for parameter processing
+      - name: Set up secrets for parameter processing
         id: setup-secrets
         shell: bash
         run: |
           echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
           echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
-          echo "cat /tmp/github_secrets.json"
+          cat /tmp/github_secrets.json
           echo "Set up secrets for parameter processing using file method"     
      
           - name: Deploy Stack

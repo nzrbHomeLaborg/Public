@@ -3,13 +3,13 @@ deployments:
     environments:
       - dev
     runners:
-      dev: ubuntu-latest    
+      dev: custom
     github_environments:
       dev: CD-EM-CRS-DEV
     aws_regions:
-      dev: us-east-2
+      dev: us-east-1
     aws_role_secrets:
-      dev: AWS_CRS_ROLE_TO_ASSUME
+      dev: AWS_ROLE_TO_ASSUME
     cfn_role_secrets:
       dev: CFN_ROLE_ARN
     iam_execution_role_secrets:

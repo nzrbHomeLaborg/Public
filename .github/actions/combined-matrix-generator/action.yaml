@@ -8,10 +8,7 @@ inputs:
     description: 'Specific environment to deploy (empty for all configured)'
     required: false
     default: ''
-  process_secrets:
-    description: 'Process secrets in parameters (true/false)'
-    required: false
-    default: 'true'
+
 
 outputs:
   dev_matrix:

@@ -53,7 +53,7 @@ deployments:
         cfnLintEnabled: "true"
         tags: Name=nazar-stack-dev
         extraArgs: "--capabilities CAPABILITY_IAM"
-        parameter-file: "parameters/dev.json"
+        parameter-file: "dev.json"
         inline-parameters:
           Environment: "dev"
           Stage: "development"

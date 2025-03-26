@@ -54,6 +54,7 @@ jobs:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.resource_paths != '' }}
     runs-on: custom
+    environment: ${{ matrix.github_environment }}
     outputs:
       dev_matrix: ${{ steps.generate-matrices.outputs.dev_matrix }}
       int_matrix: ${{ steps.generate-matrices.outputs.int_matrix }}

@@ -85,7 +85,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+      - name: Set up secrets for parameter processing
+        id: setup-secrets
+        shell: bash
+        run: |
+          # Створюємо JSON з усіма доступними секретами для середовища
+          echo "GITHUB_SECRETS='${{ toJSON(secrets) }}'" >> $GITHUB_ENV
+          echo "Set up secrets for parameter processing"     
       - name: Deploy Stack
         uses: ./.github/actions/composite
         with:

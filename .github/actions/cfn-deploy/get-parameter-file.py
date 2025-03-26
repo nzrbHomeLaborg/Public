@@ -12,6 +12,8 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger()
 
 BLUE = "\033[36m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
 RESET = "\033[0m"
 
 def main():
@@ -23,6 +25,9 @@ def main():
     github_run_number = os.environ.get('GITHUB_RUN_NUMBER', '')
     parameter_file_path = os.environ.get('INPUT_PARAMETER_OVERRIDES', '')
     inline_parameters = os.environ.get('INPUT_INLINE_JSON_PARAMETERS', '').strip()
+    
+    # Отримуємо секрети з змінної середовища
+    github_secrets = load_github_secrets()
     
     tmp_path = f"/tmp/{github_run_id}{github_run_number}"
     param_file = f"{tmp_path}/cfn-parameter-{github_run_id}-{github_run_number}.json"
@@ -72,6 +77,16 @@ def main():
             # Process each inline parameter
             for param in inline_params:
                 key = param["ParameterKey"]
+                
+                # Обробка плейсхолдера SECRET:
+                if isinstance(param["ParameterValue"], str) and param["ParameterValue"].startswith("SECRET:"):
+                    secret_name = param["ParameterValue"].replace("SECRET:", "")
+                    if secret_name in github_secrets:
+                        logger.info(f"{GREEN}Replacing SECRET:{secret_name} with actual secret value{RESET}")
+                        param["ParameterValue"] = github_secrets[secret_name]
+                    else:
+                        logger.warning(f"{YELLOW}Secret {secret_name} not found in available secrets{RESET}")
+                
                 if key in existing_params:
                     # Override existing parameter
                     combined_parameters[existing_params[key]] = param
@@ -103,6 +118,40 @@ def main():
         logger.info(f"{BLUE}No CFN parameters are available.{RESET}")
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write("PARAM_FILE=\n")
+
+def load_github_secrets():
+    """
+    Load GitHub secrets from environment variables
+    
+    Returns:
+        dict: Dictionary with secret names as keys and their values
+    """
+    # Спробуємо завантажити всі секрети з GITHUB_SECRETS змінної
+    secrets = {}
+    try:
+        secrets_json = os.environ.get('GITHUB_SECRETS', '{}')
+        secrets = json.loads(secrets_json)
+        logger.info(f"{BLUE}Loaded secrets from GITHUB_SECRETS environment variable{RESET}")
+        logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing GITHUB_SECRETS JSON: {e}")
+    
+    # Якщо секрети не знайдені через GITHUB_SECRETS, 
+    # спробуємо взяти всі змінні середовища як можливі секрети
+    if not secrets:
+        logger.info(f"{YELLOW}GITHUB_SECRETS not available, using environment variables{RESET}")
+        
+        # Додаємо всі змінні середовища (потенційно містять секрети)
+        env_var_count = 0
+        for key, value in os.environ.items():
+            # Пропускаємо службові змінні середовища GitHub Actions
+            if not key.startswith('GITHUB_') and not key.startswith('INPUT_'):
+                secrets[key] = value
+                env_var_count += 1
+        
+        logger.info(f"{BLUE}Loaded {env_var_count} environment variables as potential secrets{RESET}")
+    
+    return secrets
 
 def read_from_s3(s3_path):
     """

@@ -34,7 +34,7 @@ Resources:
     Properties: 
       TopicName: !Ref TopicName
       Subscription:
-        - Endpoint: "vinnicnaz@gmail.com"
+        - Endpoint: !Ref email
           Protocol: email
       Tags:
         - Key: riskdomain

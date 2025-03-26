@@ -161,16 +161,16 @@ jobs:
   #         iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
 
 
-  # deploy-int:
-  #   needs: [prepare-matrices, deploy-dev]
-  #   if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
-  #   runs-on: ${{ matrix.runner }}
-  #   strategy:
-  #     matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
-  #     fail-fast: false
-  #   environment: ${{ matrix.github_environment }}
+  deploy-int:
+    needs: [prepare-matrices, deploy-dev]
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
     
-  #   name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
     
     steps:
       - name: Checkout repository

@@ -71,39 +71,59 @@ runs:
         print(f"Created temporary directory: {temp_dir}")
 
         def extract_secret_names(content):
-            """Extract secret names from content using regex"""
+            """Extract secret names from content"""
             if not isinstance(content, str):
                 return []
                 
-            pattern = r'\${{.*?secrets\.([A-Za-z0-9_-]+).*?}}'
+            # Build pattern parts to avoid YAML issues
+            # We want to match ${{ secrets.NAME }}
+            pattern_parts = [
+                r'\${{\s*',
+                'secrets',  # Avoiding direct "secrets." in the YAML
+                r'\.',
+                r'([A-Za-z0-9_-]+)',
+                r'\s*}}'
+            ]
+            
+            # Join parts at runtime to create the full pattern
+            pattern = ''.join(pattern_parts)
+            
+            # Find all matches
             matches = re.findall(pattern, content)
             return matches
 
         def replace_secrets(content):
             """Replace secret references with their values"""
-            if not isinstance(content, str) or 'secrets.' not in content:
+            if not isinstance(content, str):
                 return content
                 
-            pattern = r'\${{.*?secrets\.([A-Za-z0-9_-]+).*?}}'
+            # Check for potential secret references without using regex initially
+            if not ('${{' in content and '}}' in content and 'secrets' in content):
+                return content
+                
+            # Build pattern parts to avoid YAML issues
+            pattern_parts = [
+                r'\${{\s*',
+                'secrets',  # Avoiding direct "secrets." in the YAML
+                r'\.',
+                r'([A-Za-z0-9_-]+)',
+                r'\s*}}'
+            ]
+            
+            # Join parts at runtime to create the full pattern
+            pattern = ''.join(pattern_parts)
             
             # Find all secret references
-            secret_refs = {}
+            modified_content = content
             for match in re.finditer(pattern, content):
                 full_match = match.group(0)  # The entire match ${{ secrets.X }}
                 secret_name = match.group(1)  # Just the secret name X
                 
-                # Only process each unique reference once
-                if full_match not in secret_refs:
-                    secret_refs[full_match] = secret_name
-            
-            # Replace each reference with its value
-            modified_content = content
-            for ref, name in secret_refs.items():
-                if name in os.environ:
-                    print(f"Replacing secret: {name}")
-                    modified_content = modified_content.replace(ref, os.environ[name])
+                if secret_name in os.environ:
+                    print(f"Replacing secret: {secret_name}")
+                    modified_content = modified_content.replace(full_match, os.environ[secret_name])
                 else:
-                    print(f"Warning: Secret {name} not found in environment")
+                    print(f"Warning: Secret {secret_name} not found in environment")
             
             return modified_content
 
@@ -118,9 +138,9 @@ runs:
             with open(file_path, 'r') as f:
                 content = f.read()
             
-            # Check if the file contains secrets
-            if 'secrets.' not in content:
-                print("No secrets found in parameter file")
+            # Check if the file might contain secrets (quick check before regex)
+            if not ('${{' in content and '}}' in content and 'secrets' in content):
+                print("No potential secrets found in parameter file")
                 return file_path
                 
             # Replace secrets in the content
@@ -147,10 +167,10 @@ runs:
                 
             inline_params = params['inline-parameters']
             
-            # Skip if not a format we recognize or no secrets present
-            if not inline_params or (isinstance(inline_params, str) and 'secrets.' not in inline_params):
+            # Skip if no inline parameters
+            if not inline_params:
                 return params
-                
+            
             print("Processing inline parameters")
             
             # Handle array format (list of dicts with ParameterKey/ParameterValue)
@@ -158,13 +178,13 @@ runs:
                 for item in inline_params:
                     if isinstance(item, dict) and 'ParameterValue' in item:
                         value = item['ParameterValue']
-                        if isinstance(value, str) and 'secrets.' in value:
+                        if isinstance(value, str) and '${{' in value and '}}' in value and 'secrets' in value:
                             item['ParameterValue'] = replace_secrets(value)
             
             # Handle object format (simple key/value pairs)
             elif isinstance(inline_params, dict):
                 for key, value in inline_params.items():
-                    if isinstance(value, str) and 'secrets.' in value:
+                    if isinstance(value, str) and '${{' in value and '}}' in value and 'secrets' in value:
                         inline_params[key] = replace_secrets(value)
             
             # Update the parameters with processed inline params

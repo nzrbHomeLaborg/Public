@@ -81,7 +81,7 @@ runs:
           inline-parameters: ${{ inputs.inline-parameters }}
           parameter-file: ${{ inputs.parameter-file }} 
           cfn-role-arn: ${{ inputs.cfn-role-arn }}
-          iam-execution-role-arn: ${{ inputs.iam-execution-role-arn}}
+          iam-execution-role-arn: ${{ inputs.aws-role-to-assume }}
           aws-region: ${{ inputs.aws-region }}
           tags-json: |-
             [ { "Key": "Name", "Value": "${{ inputs.stack-name }}" }, ${{ inputs.tags-json }} ]  # JSON format tags

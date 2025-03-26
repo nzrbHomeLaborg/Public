@@ -1,0 +1,90 @@
+name: 'Deploy SNS Topic Composite'
+description: 'Composite action to deploy SNS Topic via CloudFormation'
+
+inputs:
+  environment:
+    description: 'Environment to deploy to (dev, int, prod)'
+    required: true
+  stack-name:
+    description: 'CloudFormation stack name'
+    required: true
+  bucket-name:
+    description: 'S3 bucket name for CloudFormation templates'
+    required: true
+  target-folder:
+    description: 'Target folder in S3 bucket'
+    required: true
+    default: 'cloud-formation/rcc/a-CRS-sns'
+  source-folder:
+    description: 'Source folder with CloudFormation templates'
+    required: true
+    default: 'cloud-formation/rcc/a-CRS-sns'
+  template-name:
+    description: 'CloudFormation template filename'
+    required: true
+    default: 'a-CRS-sns.yaml'
+  inline-parameters:
+    description: 'JSON string of CloudFormation parameters'
+    required: true
+  parameter-file:
+    description: "Path to parameters file (local or S3 URL starting with s3://)"
+    required: false
+    default: ""    
+  tags:
+    description: 'CloudFormation stack tags'
+    required: true
+  tags-json:
+    description: 'CloudFormation stack tags'
+    required: false      
+  aws-region:
+    description: 'AWS Region'
+    required: false
+    default: 'us-east-2'
+  aws-role-to-assume:
+    description: 'AWS Role to assume'
+    required: true
+  cfn-role-arn:
+    description: 'CloudFormation Role ARN'
+    required: true
+  iam-execution-role-arn:
+    description: 'IAM Execution Role ARN'
+    required: true
+  upload-to-s3:
+    description: 'Whether to upload templates to S3 bucket'
+    required: false
+    default: 'true'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws-role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+    
+    - name: Upload files to S3 bucket
+      if: inputs.upload-to-s3 == 'true'
+      uses: ./.github/actions/s3-upload
+      with:
+        bucket-name: ${{ inputs.bucket-name }}
+        target-folder: ${{ inputs.target-folder }}
+        source-folder: ${{ inputs.source-folder }}
+        filename-patterns: "*.yaml"
+        acl: private
+
+    - name: Deploy AWS Resources via CloudFormation
+      uses: ./.github/actions/cfn-deploy
+      with:
+          stack-name: ${{ inputs.stack-name }}
+          template: https://s3.amazonaws.com/${{ inputs.bucket-name }}/${{ inputs.target-folder }}/${{ inputs.template-name }}
+          inline-parameters: ${{ inputs.inline-parameters }}
+          parameter-file: ${{ inputs.parameter-file }} 
+          cfn-role-arn: ${{ inputs.cfn-role-arn }}
+          iam-execution-role-arn: ${{ inputs.iam-execution-role-arn}}
+          aws-region: ${{ inputs.aws-region }}
+          tags-json: |-
+            [ { "Key": "Name", "Value": "${{ inputs.stack-name }}" }, ${{ inputs.tags-json }} ]  # JSON format tags
+          tags: |-
+            Name=${{ inputs.stack-name }}
+            ${{ inputs.tags }} 

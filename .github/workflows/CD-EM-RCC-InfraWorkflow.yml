@@ -87,7 +87,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Deploy Stack
-        uses: ./.github/actions/deploy-stack
+        uses: ./.github/actions/composite
         with:
           environment: ${{ matrix.environment }}
           stack-name: ${{ matrix.parameters.stack-name }}
@@ -114,6 +114,44 @@ jobs:
           # prerelease: ${{ matrix.parameters.prerelease }}
           # github_token: ${{ github.token }}     
 
+
+  deploy-custom:
+    needs: [prepare-matrices, deploy-dev]
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
+    
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to ${{ matrix.environment }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Deploy Stack
+        uses: ./.github/actions/composite
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+          cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
+          iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
+
+
   deploy-int:
     needs: [prepare-matrices, deploy-dev]
     if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
@@ -130,7 +168,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Deploy Stack
-        uses: ./.github/actions/deploy-stack
+        uses: ./.github/actions/composite
         with:
           environment: ${{ matrix.environment }}
           stack-name: ${{ matrix.parameters.stack-name }}

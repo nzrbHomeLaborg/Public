@@ -1,0 +1,69 @@
+name: Upload to S3 
+description: Upload files to an S3 bucket 
+author: Ankur Avishek, Tanmoy Dalui
+inputs: 
+  source-folder: 
+    description: 'Name of the folder to upload to S3' 
+    required: true 
+    default: '.' 
+  filename-patterns: 
+    description: 'File name patterns to upload to S3 (supports wildcards, e.g. "*.txt")' 
+    required: true
+    default: '*.*' 
+  bucket-name: 
+    description: 'Name of the S3 bucket to upload to' 
+    required: true 
+  target-folder: 
+    description: 'Target folder on S3 (key prefix for uploaded files)' 
+    required: true 
+    default: ''
+  iam-role:
+    description: 'ARN of the Role to assume'
+    required: false
+  aws-region:
+    description: 'To Specify the AWS region where the S3 bucket is located'
+    required: false
+  acl: 
+    description: 'Canned Access Control List (ACL) to apply to the uploaded content. Allowed values are "private", "public-read", "public-read-write", "authenticated-read", "bucket-owner-read", "bucket-owner-full-control", "log-delivery-write".' 
+    required: false 
+    default: 'private' 
+  multipart:
+    description: 'Sepecify whether to disable multipart if file is large. if false low lavel API will be used to perform putObject to avoid permission error.'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check AWS Credentials
+      if: inputs.iam-role != '' && inputs.aws-region != ''
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.iam-role }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: "OIDCSession-${{ github.repository_id }}-${{ github.run_id }}-${{ github.job }}"
+    - name: Upload files to S3 bucket
+      if: ${{ inputs.multipart }} == 'true'
+      shell: bash
+      run: |        
+        aws s3 cp ${{ inputs.source-folder }} s3://${{ inputs.bucket-name }}/${{ inputs.target-folder }} \
+        --recursive \
+        --exclude "*" \
+        --include "${{ inputs.filename-patterns }}" \
+        --acl ${{ inputs.acl }}
+
+    - name: Upload files to S3 bucket (Low Level API)
+      if: ${{ inputs.multipart }} == 'false'
+      shell: bash
+      run: | 
+        for file in "${{ inputs.source-folder }}"/*; do
+          filename=$(basename "$file")
+          echo "File Name Found: $filename"
+          if [[ $filename == ${{ inputs.filename-patterns }} ]]; then
+            echo "Match File Pattern: $filename"
+            aws s3api put-object \
+            --bucket ${{ inputs.bucket-name }} \
+            --key "${{ inputs.target-folder }}/$filename" \
+            --body "${{ inputs.source-folder }}/$filename" 
+          fi
+        done

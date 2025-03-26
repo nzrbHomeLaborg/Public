@@ -1,0 +1,173 @@
+name: 'AWS CloudFormation "Deploy CloudFormation Stack" Action'
+description: "Deploys a AWS CloudFormation stack using this github action"
+author: 'Tanmoy Dalui'
+
+inputs:
+  stack-name:
+    description: "The name of the CloudFormation stack"
+    required: true
+  template:
+    description: "The path or URL to the CloudFormation template"
+    required: true
+  capabilities:
+    description: "The comma-delimited list of stack template capabilities to acknowledge. Defaults to 'CAPABILITY_IAM'. Allowed values are 'CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'."
+    required: false
+    default: "CAPABILITY_IAM"
+  parameter-file:
+    description: 'The parameters to override in the stack inputs. You can pass a comma-delimited list or a file URL. Comma-delimited list has each entry formatted as <ParameterName>=<ParameterValue> or <ParameterName>="<ParameterValue>,<ParameterValue>". A JSON file can be a local file with a "file://" prefix or remote URL. The file should look like: [ { "ParameterKey": "KeyPairName", "ParameterValue": "MyKey" }]'
+    required: false
+  inline-parameters:
+    description: 'The inline parameters in json format to override in the stack inputs. If parameter-overrides is passed then this parameter will be ignored.'
+    required: false
+  no-execute-changeset:
+    description: "Indicates whether to execute to the change set or have it reviewed. Default to '0' (will execute the change set)"
+    required: false
+    default: "0"
+  no-delete-failed-changeset:
+    description: "Indicates whether to delete to a failed change set. Default to '0' (will delete the failed changeset)"
+    required: false
+    default: "0"
+  no-fail-on-empty-changeset:
+    description: "If the CloudFormation change set is empty, do not fail. Defaults to '1' (will not fail on empty change set, stack update will be skippe without throwing any error)"
+    required: false
+    default: "1"
+  disable-rollback:
+    description: "Disable rollback of the stack if stack creation fails. Defaults to '0' (will rollback if stack creation fails). This input is only used for stack creation, not for stack update"
+    required: false
+    default: "0"
+  timeout-in-minutes:
+    description: "The amount of time that can pass before the stack status becomes CREATE_FAILED. This input is only used for stack creation, not for stack update"
+    required: false
+  notification-arns:
+    description: "The comma-delimited list of Amazon SNS topic ARNs to publish stack related events"
+    required: false
+  cfn-role-arn:
+    description: "The Amazon Resource Name (ARN) of an AWS Identity and Access Management (IAM) role that AWS CloudFormation assumes to create the stack. AWS CloudFormation uses the role's credentials to make calls on your behalf. AWS CloudFormation always uses this role for all future operations on the stack. As long as users have permission to operate on the stack, AWS CloudFormation uses this role even if the users don't have permission to pass it. Ensure that the role grants least privilege. If you don't specify a value, AWS CloudFormation uses the role that was previously associated with the stack"
+    required: false
+  tags-json:
+    description: 'Key-value pairs to associate with this stack. This input should be JSON-formatted, for example [ { "Key": "string", "Value": "string" } ]. It is required parameter if parameter `tags` is not provided.'
+    required: false
+  tags:
+    description: 'Key-value pairs to associate with this stack. This input should be Key=Value formatted. Each entry should be followed by new line. It is required parameter if parameter `tags-json` is not provided.'
+    required: false
+  termination-protection:
+    description: "Whether to enable termination protection on the specified stack. Defaults to '0' (terminated protection will be disabled) This input is only used for stack creation, not for stack update"
+    required: false
+    default: "0"
+  iam-execution-role-arn:
+    description: IAM execution role to connect AWS account using OIDC. If not provided then AWS credentials will be taken from environment variables.
+    required: false
+  aws-region:
+    description: AWS region to connect and deploy the resource. It is required if iam-execution-role-arn is passed.
+    required: false
+outputs:
+  stack-id:
+    description: "The id of the deployed stack. In addition, any outputs declared in the deployed CloudFormation stack will also be set as outputs for the action, e.g. if the stack has a stack output named 'foo', this action will also have an output named 'foo'."
+    value: ${{ steps.cfn-deploy.outputs.stack-id }}
+
+runs: 
+    using: 'composite'
+    steps:
+#     - name: Check if the job runs on self-hosted or GitHub managed runner
+#       id: check-runner-type
+#       run: |
+#         blue="\\e[36m"
+#         reset="\\e[0m"
+#         echo "Runner name: ${{ runner.name }}"
+#         if [[ "${{ runner.name }}" == *"GitHub Actions"* ]]; then
+#           echo "${blue}This job is running on a GitHub managed runner.${reset}"
+#           httpProxy=""
+#         else
+#           echo "${blue}This job is running on a self-hosted runner.${reset}"
+#           httpProxy="${{ inputs.http-proxy }}"
+#         fi
+#         echo "HTTP_PROXY=${httpProxy}" >> $GITHUB_OUTPUT
+#       shell: bash
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.iam-execution-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: OIDCSession-${{ github.repository_id }}-${{ github.run_id }}-${{ github.job }}
+
+    - name: Process and check tags
+      id: get-tags
+      run: |
+        chmod a+x $GITHUB_ACTION_PATH/process-tags.py
+        $GITHUB_ACTION_PATH/process-tags.py
+      shell: bash
+      env:
+        INPUT_TAGS: ${{ inputs.tags-json }}
+        INPUT_TAGS_KEY_VALUE: ${{ inputs.tags }}
+    # Check if tags are available
+    - name: Check tags
+      run: |
+        blue="\\e[36m"
+        reset="\\e[0m"
+        red="\\e[31m"
+        tagsLength=$(echo -n ${{ steps.get-tags.outputs.TAGS }} | wc -c)
+        echo "Tags length = ${tagsLength}"
+        if [[ "${tagsLength}" == "0" ]]; then
+          echo "::error:: No tags are provided for this stack. Please follow the AWS tagging guidelines (https://catdigital.atlassian.net/wiki/spaces/CD/pages/105349296/AWS+Tagging)."
+          echo -e "${red}No tags are provided for this stack. Please follow the AWS tagging guidelines (https://catdigital.atlassian.net/wiki/spaces/CD/pages/105349296/AWS+Tagging).${reset}"
+          exit 1
+        else
+          echo -e "${blue}Tags are available.${reset}"
+        fi
+      shell: bash
+    - name: Install boto3
+      run: pip install --user boto3
+      shell: bash
+    # Configure AWS credentials with OIDC
+    - name: Get parameter files
+      id: get-param-file
+      run: |
+          chmod a+x $GITHUB_ACTION_PATH/get-parameter-file.py
+          $GITHUB_ACTION_PATH/get-parameter-file.py
+      shell: bash
+      env:
+          INPUT_PARAMETER_OVERRIDES: ${{ inputs.parameter-file }}
+          INPUT_INLINE_JSON_PARAMETERS: ${{ inputs.inline-parameters }}
+
+
+
+
+    # - name: Get parameter files
+    #   id: get-param-file
+    #   run: |
+    #       chmod a+x $GITHUB_ACTION_PATH/get-parameter-file.sh
+    #       $GITHUB_ACTION_PATH/get-parameter-file.sh
+    #   shell: bash
+    #   env:
+    #       INPUT_PARAMETER_OVERRIDES: ${{ inputs.parameter-file }}
+    #       INPUT_INLINE_JSON_PARAMETERS: ${{ inputs.inline-parameters }}
+
+    # Cloudformation deployment
+    - name: AWS Cloudformation Deploy
+      id: cfn-deploy
+      uses: aws-actions/aws-cloudformation-github-deploy@master # This commit on 2024-09-10.We need to take the commit id as this action doesnot mentain the verion number.
+      with:
+        name: ${{ inputs.stack-name }}
+        template: ${{ inputs.template }}
+        capabilities: ${{ inputs.capabilities }}
+        parameter-overrides: ${{ steps.get-param-file.outputs.PARAM_FILE }}
+        no-execute-changeset: ${{ inputs.no-execute-changeset }}
+        no-delete-failed-changeset: ${{ inputs.no-delete-failed-changeset }}
+        no-fail-on-empty-changeset: ${{ inputs.no-fail-on-empty-changeset }}
+        disable-rollback: ${{ inputs.disable-rollback }}
+        timeout-in-minutes: ${{ inputs.timeout-in-minutes }}
+        # notification-arns: ${{ inputs.notification-arns }}
+        role-arn: ${{ inputs.cfn-role-arn }}
+        tags: ${{ steps.get-tags.outputs.TAGS }}
+        termination-protection: ${{ inputs.termination-protection }}
+
+    - name: Cleaning tmp folder
+      if: always()
+      run: |
+        blue="\\e[36m"
+        reset="\\e[0m"
+        echo -e "${blue}Clean up tmp folder...${reset}"
+        cd /tmp
+        rm -rf "${GITHUB_RUN_ID}${GITHUB_RUN_NUMBER}" 2>&1 || exit_val="$?"
+      shell: bash

@@ -172,30 +172,38 @@ jobs:
     
   #   name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
     
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-      
-  #     - name: Deploy Stack
-  #       uses: ./.github/actions/composite
-  #       with:
-  #         environment: ${{ matrix.environment }}
-  #         stack-name: ${{ matrix.parameters.stack-name }}
-  #         bucket-name: ${{ matrix.parameters.bucket-name }}
-  #         upload-to-s3: ${{ matrix.parameters.bucket-upload }}
-  #         target-folder: ${{ matrix.parameters.target-folder }}
-  #         source-folder: ${{ matrix.parameters.source-folder }}
-  #         template-name: ${{ matrix.parameters.template-name }}
-  #         filename-patterns: ${{ matrix.parameters.filename-patterns }}
-  #         cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
-  #         extraArgs: ${{ matrix.parameters.extraArgs }}          
-  #         parameter-file: ${{ matrix.parameters.parameter-file }}
-  #         inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
-  #         tags: ${{ matrix.parameters.tags }}
-  #         aws-region: ${{ matrix.aws_region }}
-  #         aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
-  #         cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
-  #         iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up secrets for parameter processing
+        id: setup-secrets
+        shell: bash
+        run: |
+          echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
+          echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
+          cat /tmp/github_secrets.json
+          echo "Set up secrets for parameter processing using file method"          
+      - name: Deploy Stack
+        uses: ./.github/actions/composite
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+          cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
+          iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
 
   # deploy-custom:
   #   needs: [prepare-matrices, deploy-dev]

@@ -1,6 +1,6 @@
 [
-    {
-      "ParameterKey": "email",
-      "ParameterValue": ""
-    }
-  ]
+  {
+    "ParameterKey": "email",
+    "ParameterValue": "SECRET:NZRB"
+  }
+]

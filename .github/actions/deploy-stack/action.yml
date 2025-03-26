@@ -102,6 +102,34 @@ runs:
         echo "  - AWS Region: ${{ inputs.aws-region }}"
         echo "  - Template: ${{ inputs.source-folder }}/${{ inputs.template-name }}"
         
+        # Process parameter file if provided
+        PARAMETER_OVERRIDES=""
+        if [[ -n "${{ inputs.parameter-file }}" && -f "${{ inputs.parameter-file }}" ]]; then
+          echo "Using parameter file: ${{ inputs.parameter-file }}"
+          # Don't echo the content to avoid exposing secrets
+          PARAMETER_OVERRIDES="--parameter-overrides file://${{ inputs.parameter-file }}"
+        fi
+        
+        # Process inline parameters if provided - these should have secrets already resolved
+        if [[ -n "${{ inputs.inline-parameters }}" && "${{ inputs.inline-parameters }}" != "{}" ]]; then
+          echo "Using inline parameters (secrets redacted)"
+          
+          # Parse the JSON and create parameter overrides
+          # We'll create a temporary file to hold parameters for the AWS CLI
+          INLINE_PARAMS_FILE=$(mktemp)
+          echo "${{ inputs.inline-parameters }}" > "$INLINE_PARAMS_FILE"
+          
+          # If we already have parameters from a file, we'll combine them
+          if [[ -n "$PARAMETER_OVERRIDES" ]]; then
+            PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES --parameter-overrides $(jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' "$INLINE_PARAMS_FILE")"
+          else
+            PARAMETER_OVERRIDES="--parameter-overrides $(jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' "$INLINE_PARAMS_FILE")"
+          fi
+          
+          # Clean up the temporary file
+          rm "$INLINE_PARAMS_FILE"
+        fi
+        
         # Call the actual deployment action
         # Note: This will use the AWS credentials configured in the job that calls this action
         
@@ -109,7 +137,7 @@ runs:
         # aws cloudformation deploy \
         #   --template-file ${{ inputs.source-folder }}/${{ inputs.template-name }} \
         #   --stack-name ${{ inputs.stack-name }} \
-        #   --parameter-overrides ${{ inputs.parameter-file }} \
+        #   $PARAMETER_OVERRIDES \
         #   --tags ${{ inputs.tags }} \
         #   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
         #   --role-arn ${{ inputs.cfn-role-arn }}
@@ -117,7 +145,7 @@ runs:
         # For now, we'll use the existing composite action
         echo "Calling cat-digital-platform/CD-GitHub-Actions/aws-cfn-lint-upload-create-update-composite"
         
-        # For demonstration, we'll just echo the command parameters
+        # For demonstration, we'll just echo the command parameters (without exposing secrets)
         echo "  - environment: ${{ inputs.environment }}"
         echo "  - stack-name: ${{ inputs.stack-name }}"
         echo "  - bucket-name: ${{ inputs.bucket-name }}"
@@ -128,15 +156,13 @@ runs:
         echo "  - filename-patterns: ${{ inputs.filename-patterns }}"
         echo "  - cfnLintEnabled: ${{ inputs.cfnLintEnabled }}"
         echo "  - extraArgs: ${{ inputs.extraArgs }}"
-        echo "  - parameter-file: ${{ inputs.parameter-file }}"
-        echo "  - inline-parameters: ${{ inputs.inline-parameters }}"
         echo "  - tags: ${{ inputs.tags }}"
         echo "  - aws-region: ${{ inputs.aws-region }}"
-        echo "  - aws-role-to-assume: ${{ inputs.aws-role-to-assume }}"
-        echo "  - cfn-role-arn: ${{ inputs.cfn-role-arn }}"
-        echo "  - iam-execution-role-arn: ${{ inputs.iam-execution-role-arn }}"
-        ls
-        cat ${{ inputs.parameter-file }}
+        echo "  - parameter-overrides: $PARAMETER_OVERRIDES"
+        # Don't echo sensitive values
+        echo "  - aws-role-to-assume: [REDACTED]"
+        echo "  - cfn-role-arn: [REDACTED]"
+        echo "  - iam-execution-role-arn: [REDACTED]"
 
 
     - name: Create GitHub Release

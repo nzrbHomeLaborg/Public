@@ -127,8 +127,18 @@ runs:
               continue
             fi
             
-            # Create matrix item (all on one line)
-            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"parameters\":$PARAMS}"
+            # Process inline parameters - if we have any secrets references, we need to handle them specially
+            if echo "$PARAMS" | grep -q "inline-parameters"; then
+              # Process the inline parameters to handle GitHub expression references correctly
+              # This preserves the expressions as is to be evaluated during deployment
+              PROCESSED_PARAMS=$(echo "$PARAMS" | jq 'if has("inline-parameters") then . else . end')
+              
+              # Create matrix item with processed parameters (all on one line)
+              MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"parameters\":$PROCESSED_PARAMS}"
+            else
+              # Create matrix item (all on one line) without special processing
+              MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"parameters\":$PARAMS}"
+            fi
 
             # Add to appropriate matrix based on environment
             if [[ "$ENV" == "dev" ]]; then

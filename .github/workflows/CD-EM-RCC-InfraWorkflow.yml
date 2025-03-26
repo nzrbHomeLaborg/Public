@@ -100,7 +100,7 @@ jobs:
           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
           extraArgs: ${{ matrix.parameters.extraArgs }}          
           parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters | fromJSON) }}
           tags: ${{ matrix.parameters.tags }}
           aws-region: ${{ matrix.aws_region }}
           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
@@ -143,7 +143,7 @@ jobs:
           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
           extraArgs: ${{ matrix.parameters.extraArgs }}          
           parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters | fromJSON) }}
           tags: ${{ matrix.parameters.tags }}
           aws-region: ${{ matrix.aws_region }}
           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
@@ -179,7 +179,7 @@ jobs:
           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
           extraArgs: ${{ matrix.parameters.extraArgs }}          
           parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters | fromJSON) }}
           tags: ${{ matrix.parameters.tags }}
           aws-region: ${{ matrix.aws_region }}
           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
@@ -216,7 +216,7 @@ jobs:
           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
           extraArgs: ${{ matrix.parameters.extraArgs }}          
           parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters | fromJSON) }}
           tags: ${{ matrix.parameters.tags }}
           aws-region: ${{ matrix.aws_region }}
           aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}

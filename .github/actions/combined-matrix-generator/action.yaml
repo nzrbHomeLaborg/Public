@@ -40,27 +40,6 @@ runs:
           sudo mv ${BINARY} /usr/bin/yq || mkdir -p $HOME/bin && mv ${BINARY} $HOME/bin/yq && echo "$HOME/bin" >> $GITHUB_PATH
         fi
 
-    - name: Prepare secrets map
-      id: prepare-secrets
-      shell: bash
-      run: |
-        # Create a directory to store extracted secret names
-        mkdir -p /tmp/secrets-data
-        
-        # Get all environment variables and filter those that are likely to be secrets
-        # GitHub Actions sets secrets as environment variables
-        env | grep -v "^GITHUB_" | grep -v "^RUNNER_" | grep -v "^PATH=" | sort > /tmp/secrets-data/env-vars.txt
-        
-        # Create a secrets map file to use for replacements
-        echo "# Secrets Map" > /tmp/secrets-data/secrets-map.txt
-        echo "# Format: SECRET_NAME|SECRET_VALUE" >> /tmp/secrets-data/secrets-map.txt
-        
-        # Log the number of potential secrets
-        SECRET_COUNT=$(cat /tmp/secrets-data/env-vars.txt | wc -l)
-        echo "Detected $SECRET_COUNT potential secret variables"
-        
-        echo "secrets_dir=/tmp/secrets-data" >> $GITHUB_OUTPUT
-
     - name: Generate deployment matrices
       id: generate-matrices
       shell: bash
@@ -74,9 +53,10 @@ runs:
         extract_secret_names() {
           local content="$1"
           local temp_file="/tmp/secret-extract-$RANDOM.txt"
+          local SECRET_PATTERN='\${{[[:space:]]*secrets\.[A-Za-z0-9_-]*[[:space:]]*}}'
           
           # Extract everything that looks like ${{ secrets.SOMETHING }}
-          echo "$content" | grep -o '\${{[[:space:]]*secrets\.[A-Za-z0-9_-]*[[:space:]]*}}' | sort -u > "$temp_file"
+          echo "$content" | grep -o "$SECRET_PATTERN" | sort -u > "$temp_file"
           
           # Extract just the secret names
           if [[ -s "$temp_file" ]]; then
@@ -97,7 +77,7 @@ runs:
           fi
           
           # Check if the content contains any secrets pattern
-          if [[ "$json_str" == *"secrets."* ]]; then
+          if [[ "$json_str" == *'${{' && "$json_str" == *'secrets.' && "$json_str" == *'}}' ]]; then
             echo "Found secrets pattern in parameters, processing..."
             
             # Extract secret names
@@ -106,13 +86,15 @@ runs:
             # Loop through each secret name
             for secret_name in $secret_names; do
               # Access the secret value from environment variables
+              # This is the key part - the environment variables should be available directly
               local secret_value="${!secret_name}"
               
               if [[ -n "$secret_value" ]]; then
                 echo "Processing secret: $secret_name"
                 # Replace all occurrences of the secret reference with its value
                 # We use a safe pattern that should work in YAML
-                json_str=$(echo "$json_str" | sed "s|\\\${{[[:space:]]*secrets\.$secret_name[[:space:]]*}}|$secret_value|g")
+                local REPLACE_PATTERN='\${{[[:space:]]*secrets\.'$secret_name'[[:space:]]*}}'
+                json_str=$(echo "$json_str" | sed "s|$REPLACE_PATTERN|$secret_value|g")
               else
                 echo "Warning: Secret $secret_name not available in environment"
               fi
@@ -131,7 +113,7 @@ runs:
               local file_content=$(cat "$pf")
               
               # Check if file contains secrets
-              if [[ "$file_content" == *"secrets."* ]]; then
+              if [[ "$file_content" == *'${{' && "$file_content" == *'secrets.' && "$file_content" == *'}}' ]]; then
                 # Extract secret names from file
                 local file_secret_names=$(extract_secret_names "$file_content")
                 
@@ -141,7 +123,8 @@ runs:
                   
                   if [[ -n "$secret_value" ]]; then
                     echo "Processing secret in file: $secret_name"
-                    file_content=$(echo "$file_content" | sed "s|\\\${{[[:space:]]*secrets\.$secret_name[[:space:]]*}}|$secret_value|g")
+                    local FILE_REPLACE_PATTERN='\${{[[:space:]]*secrets\.'$secret_name'[[:space:]]*}}'
+                    file_content=$(echo "$file_content" | sed "s|$FILE_REPLACE_PATTERN|$secret_value|g")
                   else
                     echo "Warning: Secret $secret_name not available for parameter file"
                   fi

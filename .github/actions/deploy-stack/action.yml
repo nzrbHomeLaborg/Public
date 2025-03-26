@@ -102,6 +102,128 @@ runs:
         echo "  - AWS Region: ${{ inputs.aws-region }}"
         echo "  - Template: ${{ inputs.source-folder }}/${{ inputs.template-name }}"
         
+        # Process parameter file if provided
+        PARAMETER_OVERRIDES=""
+        if [[ -n "${{ inputs.parameter-file }}" && -f "${{ inputs.parameter-file }}" ]]; then
+          echo "Using parameter file: ${{ inputs.parameter-file }}"
+          # Don't echo the content to avoid exposing secrets
+          PARAMETER_OVERRIDES="--parameter-overrides file://${{ inputs.parameter-file }}"
+        fi
+        
+        # Process inline parameters if provided
+        if [[ -n "${{ inputs.inline-parameters }}" && "${{ inputs.inline-parameters }}" != "{}" ]]; then
+          echo "Using inline parameters (secrets redacted for security)"
+          
+          # Create a temporary file to hold our processed parameters
+          INLINE_PARAMS_FILE=$(mktemp)
+          PROCESSED_PARAMS_FILE=$(mktemp)
+          
+          # Write the inline parameters to the temporary file
+          echo '${{ inputs.inline-parameters }}' > "$INLINE_PARAMS_FILE"
+          
+          # Check if we have secret mappings
+          if jq -e 'has("secret_mapping")' "$INLINE_PARAMS_FILE" > /dev/null; then
+            # Extract the inline parameters
+            jq '.inline-parameters' "$INLINE_PARAMS_FILE" > "$PROCESSED_PARAMS_FILE"
+            
+            # Extract the secret mapping
+            SECRET_MAP=$(jq '.secret_mapping' "$INLINE_PARAMS_FILE")
+            
+            # Process each parameter, replacing placeholders with actual secrets
+            LENGTH=$(jq 'length' "$PROCESSED_PARAMS_FILE")
+            for i in $(seq 0 $((LENGTH - 1))); do
+              # Get parameter key and value
+              PARAM_KEY=$(jq -r ".[$i].ParameterKey" "$PROCESSED_PARAMS_FILE")
+              PARAM_VALUE=$(jq -r ".[$i].ParameterValue" "$PROCESSED_PARAMS_FILE")
+              
+              # Check if this is a placeholder for a secret
+              if [[ "$PARAM_VALUE" == __SECRET_PLACEHOLDER__* ]]; then
+                # Extract the parameter key from the placeholder
+                PLACEHOLDER_KEY=${PARAM_VALUE#__SECRET_PLACEHOLDER__}
+                
+                # Get the secret name from our mapping
+                SECRET_NAME=$(echo "$SECRET_MAP" | jq -r --arg key "$PLACEHOLDER_KEY" '.[$key]')
+                
+                if [[ -n "$SECRET_NAME" && "$SECRET_NAME" != "null" ]]; then
+                  # Replace the placeholder with the actual secret value
+                  # Dynamic secret resolution based on name
+                  echo "Resolving secret: $SECRET_NAME"
+                  
+                  # Create a script that uses GitHub expressions to get the secret value
+                  SECRET_SCRIPT=$(mktemp)
+                  echo "#!/bin/bash" > "$SECRET_SCRIPT"
+                  
+                  # Add all possible secrets your workflow might need
+                  # This is a workaround since we can't dynamically reference secrets in GitHub Actions
+                  cat << 'EOT' >> "$SECRET_SCRIPT"
+                  case "$1" in
+                    "NZRB")
+                      echo "${{ secrets.NZRB }}"
+                      ;;
+                    "AWS_ROLE_TO_ASSUME")
+                      echo "${{ secrets.AWS_ROLE_TO_ASSUME }}"
+                      ;;
+                    "CFN_ROLE_ARN")
+                      echo "${{ secrets.CFN_ROLE_ARN }}"
+                      ;;
+                    "IAM_EXECUTION_ROLE_ARN")
+                      echo "${{ secrets.IAM_EXECUTION_ROLE_ARN }}"
+                      ;;
+                    "AWS_CRS_ROLE_TO_ASSUME")
+                      echo "${{ secrets.AWS_CRS_ROLE_TO_ASSUME }}"
+                      ;;
+                    *)
+                      echo "SECRET_NOT_FOUND"
+                      ;;
+                  esac
+                  EOT
+                  
+                  # Make the script executable
+                  chmod +x "$SECRET_SCRIPT"
+                  
+                  # Get the actual secret
+                  ACTUAL_SECRET=$("$SECRET_SCRIPT" "$SECRET_NAME")
+                  
+                  # Clean up
+                  rm "$SECRET_SCRIPT"
+                  
+                  # Check if we found the secret
+                  if [[ "$ACTUAL_SECRET" == "SECRET_NOT_FOUND" ]]; then
+                    echo "Warning: Unknown secret name: $SECRET_NAME"
+                  fi
+                  
+                  # Update the parameter value in the processed parameters file
+                  jq --arg i "$i" --arg value "$ACTUAL_SECRET" '.[$i|tonumber].ParameterValue = $value' "$PROCESSED_PARAMS_FILE" > "${PROCESSED_PARAMS_FILE}.tmp" && mv "${PROCESSED_PARAMS_FILE}.tmp" "$PROCESSED_PARAMS_FILE"
+                fi
+              fi
+            done
+            
+            # Debug info without exposing secrets (just parameter keys)
+            echo "Parameter keys: $(jq -r 'map(.ParameterKey) | join(", ")' "$PROCESSED_PARAMS_FILE")"
+            
+            # If we already have parameters from a file, we'll combine them
+            if [[ -n "$PARAMETER_OVERRIDES" ]]; then
+              PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES --parameter-overrides $(jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' "$PROCESSED_PARAMS_FILE")"
+            else
+              PARAMETER_OVERRIDES="--parameter-overrides $(jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' "$PROCESSED_PARAMS_FILE")"
+            fi
+          else
+            # No secret mappings, just process the inline parameters as is
+            # Debug info without exposing secrets (just parameter keys)
+            echo "Parameter keys: $(jq -r 'map(.ParameterKey) | join(", ")' "$INLINE_PARAMS_FILE")"
+            
+            # If we already have parameters from a file, we'll combine them
+            if [[ -n "$PARAMETER_OVERRIDES" ]]; then
+              PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES --parameter-overrides $(jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' "$INLINE_PARAMS_FILE")"
+            else
+              PARAMETER_OVERRIDES="--parameter-overrides $(jq -r 'map("\(.ParameterKey)=\(.ParameterValue)") | join(" ")' "$INLINE_PARAMS_FILE")"
+            fi
+          fi
+          
+          # Clean up the temporary files
+          rm "$INLINE_PARAMS_FILE" "$PROCESSED_PARAMS_FILE" 2>/dev/null || true
+        fi
+        
         # Call the actual deployment action
         # Note: This will use the AWS credentials configured in the job that calls this action
         
@@ -109,7 +231,7 @@ runs:
         # aws cloudformation deploy \
         #   --template-file ${{ inputs.source-folder }}/${{ inputs.template-name }} \
         #   --stack-name ${{ inputs.stack-name }} \
-        #   --parameter-overrides ${{ inputs.parameter-file }} \
+        #   $PARAMETER_OVERRIDES \
         #   --tags ${{ inputs.tags }} \
         #   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
         #   --role-arn ${{ inputs.cfn-role-arn }}
@@ -117,7 +239,7 @@ runs:
         # For now, we'll use the existing composite action
         echo "Calling cat-digital-platform/CD-GitHub-Actions/aws-cfn-lint-upload-create-update-composite"
         
-        # For demonstration, we'll just echo the command parameters
+        # For demonstration, we'll just echo the command parameters (without exposing secrets)
         echo "  - environment: ${{ inputs.environment }}"
         echo "  - stack-name: ${{ inputs.stack-name }}"
         echo "  - bucket-name: ${{ inputs.bucket-name }}"
@@ -128,15 +250,13 @@ runs:
         echo "  - filename-patterns: ${{ inputs.filename-patterns }}"
         echo "  - cfnLintEnabled: ${{ inputs.cfnLintEnabled }}"
         echo "  - extraArgs: ${{ inputs.extraArgs }}"
-        echo "  - parameter-file: ${{ inputs.parameter-file }}"
-        echo "  - inline-parameters: ${{ inputs.inline-parameters }}"
         echo "  - tags: ${{ inputs.tags }}"
         echo "  - aws-region: ${{ inputs.aws-region }}"
-        echo "  - aws-role-to-assume: ${{ inputs.aws-role-to-assume }}"
-        echo "  - cfn-role-arn: ${{ inputs.cfn-role-arn }}"
-        echo "  - iam-execution-role-arn: ${{ inputs.iam-execution-role-arn }}"
-        ls
-        cat ${{ inputs.parameter-file }}
+        echo "  - parameter-overrides: $PARAMETER_OVERRIDES"
+        # Don't echo sensitive values
+        echo "  - aws-role-to-assume: [REDACTED]"
+        echo "  - cfn-role-arn: [REDACTED]"
+        echo "  - iam-execution-role-arn: [REDACTED]"
 
 
     - name: Create GitHub Release

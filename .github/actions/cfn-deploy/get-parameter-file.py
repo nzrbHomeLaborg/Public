@@ -119,15 +119,53 @@ def main():
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write("PARAM_FILE=\n")
 
+Здається, ви зіткнулися з проблемою форматування під час спроби встановити змінну середовища з JSON-рядком секретів. GitHub Actions має специфічні вимоги до формату команди env.
+
+Давайте виправимо цю проблему в кроці налаштування секретів:
+
+```yaml
+- name: Set up secrets for parameter processing
+  id: setup-secrets
+  shell: bash
+  run: |
+    # Створюємо тимчасовий файл з секретами в форматі JSON
+    echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
+    # Встановлюємо змінну середовища, що вказує на цей файл
+    echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
+    echo "Set up secrets for parameter processing using file method"
+```
+
+А потім модифікуємо Python скрипт для читання секретів з файлу:
+
+
 def load_github_secrets():
     """
-    Load GitHub secrets from environment variables
+    Load GitHub secrets from environment variables or file
     
     Returns:
         dict: Dictionary with secret names as keys and their values
     """
-    # Спробуємо завантажити всі секрети з GITHUB_SECRETS змінної
     secrets = {}
+    
+    # Спочатку перевіряємо, чи є шлях до файлу з секретами
+    secrets_path = os.environ.get('GITHUB_SECRETS_PATH', '')
+    if secrets_path and os.path.exists(secrets_path):
+        try:
+            with open(secrets_path, 'r') as f:
+                secrets = json.load(f)
+            logger.info(f"{BLUE}Loaded secrets from file: {secrets_path}{RESET}")
+            logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
+            # Видаляємо файл після зчитування для безпеки
+            try:
+                os.remove(secrets_path)
+                logger.info(f"{BLUE}Removed secrets file after reading{RESET}")
+            except:
+                pass
+            return secrets
+        except Exception as e:
+            logger.error(f"Error reading secrets from file: {e}")
+    
+    # Якщо файл недоступний, спробуйте через GITHUB_SECRETS змінну
     try:
         secrets_json = os.environ.get('GITHUB_SECRETS', '{}')
         secrets = json.loads(secrets_json)
@@ -136,10 +174,9 @@ def load_github_secrets():
     except json.JSONDecodeError as e:
         logger.error(f"Error parsing GITHUB_SECRETS JSON: {e}")
     
-    # Якщо секрети не знайдені через GITHUB_SECRETS, 
-    # спробуємо взяти всі змінні середовища як можливі секрети
+    # Якщо секрети ще не знайдені, збираємо всі змінні середовища
     if not secrets:
-        logger.info(f"{YELLOW}GITHUB_SECRETS not available, using environment variables{RESET}")
+        logger.info(f"{YELLOW}No secrets found via preferred methods, using environment variables{RESET}")
         
         # Додаємо всі змінні середовища (потенційно містять секрети)
         env_var_count = 0

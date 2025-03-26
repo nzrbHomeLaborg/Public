@@ -29,5 +29,6 @@ deployments:
         inline-parameters:
           - ParameterKey: TopicName
             ParameterValue: a-crs-CloudWatch-Alarms-dev-test
-          - ParameterKey: email
-            ParameterValue: "SECRET:NZRB"
+        parameter-file: cloud-formation/rcc/sns-topic-34/dev.json  
+
+            

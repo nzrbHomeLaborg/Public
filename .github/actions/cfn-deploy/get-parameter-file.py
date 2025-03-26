@@ -119,24 +119,6 @@ def main():
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write("PARAM_FILE=\n")
 
-Здається, ви зіткнулися з проблемою форматування під час спроби встановити змінну середовища з JSON-рядком секретів. GitHub Actions має специфічні вимоги до формату команди env.
-
-Давайте виправимо цю проблему в кроці налаштування секретів:
-
-```yaml
-- name: Set up secrets for parameter processing
-  id: setup-secrets
-  shell: bash
-  run: |
-    # Створюємо тимчасовий файл з секретами в форматі JSON
-    echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
-    # Встановлюємо змінну середовища, що вказує на цей файл
-    echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
-    echo "Set up secrets for parameter processing using file method"
-```
-
-А потім модифікуємо Python скрипт для читання секретів з файлу:
-
 
 def load_github_secrets():
     """

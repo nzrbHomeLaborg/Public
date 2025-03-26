@@ -11,7 +11,7 @@ def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description='Generate deployment matrices with secret processing')
     parser.add_argument('--resource-paths', required=True, help='Comma-separated paths to resources')
-    parser.add_argument('--specific-environment', default='', help='Specific environment to deploy (leave empty for all)')
+    parser.add_argument('--specific-environment', default='CD-EM-CRS-DEV', help='Specific environment to deploy (leave empty for all)')
     parser.add_argument('--process-secrets', action='store_true', default=True, help='Process secrets in parameters')
     parser.add_argument('--no-process-secrets', action='store_false', dest='process_secrets', help='Disable secret processing')
     return parser.parse_args()

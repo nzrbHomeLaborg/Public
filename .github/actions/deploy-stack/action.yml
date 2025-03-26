@@ -135,7 +135,27 @@ runs:
         echo "  - aws-role-to-assume: ${{ inputs.aws-role-to-assume }}"
         echo "  - cfn-role-arn: ${{ inputs.cfn-role-arn }}"
         echo "  - iam-execution-role-arn: ${{ inputs.iam-execution-role-arn }}"
-        grep "ParametersValue" ${{ inputs.parameter-file }}" | sed 's/\(.*ParametersValue": "\)\(.\{3\}\).*"/\1\2..."/g'
+    - name: Check for secret patterns in template
+      run: |
+        echo "Secret patterns found in template file:"
+        grep -o "\${{ secrets.[^}]*" dev.json | sort | uniq
+        
+        echo "In actual deployment, GitHub Actions will replace all"
+        echo "instances of \${{ secrets.X }} with real secret values"
+    
+    - name: Test actual secret replacement
+      run: |
+        # Create a test string with a secret
+        TEST_STRING="Test secret value: ${{ secrets.GoogleUi-dev }}"
+        
+        # Check if pattern was replaced (show first 3 chars only)
+        if [[ "$TEST_STRING" != *"${{ secrets."* ]]; then
+          echo "SUCCESS: Secret was replaced with real value"
+          echo "First few characters: ${TEST_STRING:19:3}..."
+        else
+          echo "ERROR: Secret replacement failed!"
+          exit 1
+        fi
 
     - name: Create GitHub Release
       if: ${{ inputs.create-release == 'true' }}

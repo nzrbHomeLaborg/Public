@@ -40,271 +40,287 @@ runs:
           sudo mv ${BINARY} /usr/bin/yq || mkdir -p $HOME/bin && mv ${BINARY} $HOME/bin/yq && echo "$HOME/bin" >> $GITHUB_PATH
         fi
 
-    - name: Generate deployment matrices
+    - name: Generate matrices with Python
       id: generate-matrices
-      shell: bash
+      shell: python
       run: |
-        # Initialize empty arrays for matrix items
-        DEV_MATRIX_ITEMS=()
-        INT_MATRIX_ITEMS=()
-        PROD_MATRIX_ITEMS=()
-        
-        # Process secrets in a string - replace any ${{ secrets.X }} with actual value
-        process_secrets_string() {
-          local str="$1"
-          local modified_str="$str"
-          
-          # Only process if feature enabled and string contains the secrets keyword
-          if [[ "${{ inputs.process_secrets }}" != "true" || "$str" != *"secrets."* ]]; then
-            echo "$str"
-            return
-          fi
-          
-          # Extract potential secret references
-          local secrets_list
-          secrets_list=$(echo "$str" | grep -o '\${{.*secrets\.[^}]*}}' || echo "")
-          
-          # Process each secret reference
-          if [[ -n "$secrets_list" ]]; then
-            echo "Found secrets to process..."
-            while IFS= read -r secret_ref; do
-              # Extract just the secret name
-              local secret_name
-              secret_name=$(echo "$secret_ref" | sed -E 's/.*secrets\.([A-Za-z0-9_-]*).*/\1/')
-              
-              # Get the value from environment variables
-              if [[ -n "$secret_name" ]]; then
-                local secret_value="${!secret_name}"
-                if [[ -n "$secret_value" ]]; then
-                  echo "Replacing secret: $secret_name"
-                  # Replace in the string (using | as delimiter to avoid issues with / in paths)
-                  modified_str=$(echo "$modified_str" | sed "s|$secret_ref|$secret_value|g")
-                else
-                  echo "Warning: Secret $secret_name not available in environment"
-                fi
-              fi
-            done <<< "$secrets_list"
-          fi
-          
-          echo "$modified_str"
-        }
-        
-        # Process secrets in a JSON object
-        process_secrets_in_json() {
-          local json_str="$1"
-          
-          # Only process if feature enabled
-          if [[ "${{ inputs.process_secrets }}" != "true" || "$json_str" != *"secrets."* ]]; then
-            echo "$json_str"
-            return
-          fi
-          
-          echo "Processing secrets in parameters..."
-          
-          # Process parameter-file if present
-          local pf=$(echo "$json_str" | jq -r '.["parameter-file"] // ""')
-          if [[ -n "$pf" && "$pf" != "null" && -f "$pf" ]]; then
-            echo "Processing parameter file: $pf"
-            local temp_dir="/tmp/matrix-params"
-            mkdir -p "$temp_dir"
-            local proc_file="$temp_dir/$(basename "$pf")"
-            
-            # Process the file content
-            local file_content=$(cat "$pf")
-            local processed_content
-            processed_content=$(process_secrets_string "$file_content")
-            
-            # Only create new file if content was modified
-            if [[ "$file_content" != "$processed_content" ]]; then
-              echo "$processed_content" > "$proc_file"
-              echo "Created processed parameter file: $proc_file"
-              # Update the path in JSON
-              json_str=$(echo "$json_str" | jq --arg path "$proc_file" '.["parameter-file"]=$path')
-            else
-              echo "No changes needed in parameter file"
-            fi
-          fi
-          
-          # Process inline-parameters if present
-          if echo "$json_str" | jq -e '.["inline-parameters"]' >/dev/null 2>&1; then
-            echo "Processing inline-parameters..."
-            
-            # Check if it's an array or object
-            local inline_type
-            inline_type=$(echo "$json_str" | jq -r 'if .["inline-parameters"] | type == "array" then "array" else "object" end')
-            
-            if [[ "$inline_type" == "array" ]]; then
-              # Handle array format (with ParameterKey/ParameterValue)
-              local item_count
-              item_count=$(echo "$json_str" | jq '.["inline-parameters"] | length')
-              
-              # Process each item
-              for ((i=0; i<item_count; i++)); do
-                local param_value
-                param_value=$(echo "$json_str" | jq -r --argjson idx "$i" '.["inline-parameters"][$idx].ParameterValue')
+        import os
+        import re
+        import json
+        import shutil
+        import tempfile
+        import subprocess
+        from pathlib import Path
+
+        # Get inputs
+        resource_paths = "${{ inputs.resource_paths }}".split(",")
+        specific_environment = "${{ inputs.specific_environment }}"
+        process_secrets = "${{ inputs.process_secrets }}" == "true"
+
+        print(f"Processing resource paths: {resource_paths}")
+        print(f"Specific environment: {specific_environment or 'None'}")
+        print(f"Processing secrets: {process_secrets}")
+
+        # Initialize matrices
+        dev_matrix_items = []
+        int_matrix_items = []
+        prod_matrix_items = []
+
+        # Create temp directory for processed parameter files
+        temp_dir = Path(tempfile.mkdtemp(prefix="matrix-params-"))
+        print(f"Created temporary directory: {temp_dir}")
+
+        def extract_secret_names(content):
+            """Extract secret names from content using regex"""
+            if not isinstance(content, str):
+                return []
                 
-                # Only process string values that contain secrets
-                if [[ -n "$param_value" && "$param_value" == *"secrets."* ]]; then
-                  local processed_value
-                  processed_value=$(process_secrets_string "$param_value")
-                  
-                  # Update the value if changed
-                  if [[ "$param_value" != "$processed_value" ]]; then
-                    json_str=$(echo "$json_str" | jq --argjson idx "$i" --arg val "$processed_value" '.["inline-parameters"][$idx].ParameterValue=$val')
-                  fi
-                fi
-              done
-            else
-              # Handle object format (key/value pairs)
-              local keys
-              keys=$(echo "$json_str" | jq -r '.["inline-parameters"] | keys[]')
-              
-              # Process each key
-              for key in $keys; do
-                local value
-                value=$(echo "$json_str" | jq -r --arg k "$key" '.["inline-parameters"][$k]')
+            pattern = r'\${{.*?secrets\.([A-Za-z0-9_-]+).*?}}'
+            matches = re.findall(pattern, content)
+            return matches
+
+        def replace_secrets(content):
+            """Replace secret references with their values"""
+            if not isinstance(content, str) or 'secrets.' not in content:
+                return content
                 
-                # Only process string values that contain secrets
-                if [[ -n "$value" && "$value" == *"secrets."* ]]; then
-                  local processed_value
-                  processed_value=$(process_secrets_string "$value")
-                  
-                  # Update the value if changed
-                  if [[ "$value" != "$processed_value" ]]; then
-                    json_str=$(echo "$json_str" | jq --arg k "$key" --arg val "$processed_value" '.["inline-parameters"][$k]=$val')
-                  fi
-                fi
-              done
-            fi
-          fi
-          
-          echo "$json_str"
-        }
-        
-        # Split input resource paths by comma
-        IFS=',' read -ra RESOURCE_PATHS <<< "${{ inputs.resource_paths }}"
-        
+            pattern = r'\${{.*?secrets\.([A-Za-z0-9_-]+).*?}}'
+            
+            # Find all secret references
+            secret_refs = {}
+            for match in re.finditer(pattern, content):
+                full_match = match.group(0)  # The entire match ${{ secrets.X }}
+                secret_name = match.group(1)  # Just the secret name X
+                
+                # Only process each unique reference once
+                if full_match not in secret_refs:
+                    secret_refs[full_match] = secret_name
+            
+            # Replace each reference with its value
+            modified_content = content
+            for ref, name in secret_refs.items():
+                if name in os.environ:
+                    print(f"Replacing secret: {name}")
+                    modified_content = modified_content.replace(ref, os.environ[name])
+                else:
+                    print(f"Warning: Secret {name} not found in environment")
+            
+            return modified_content
+
+        def process_parameter_file(file_path):
+            """Process a parameter file and return the path to the processed file"""
+            if not file_path or not os.path.isfile(file_path):
+                return file_path
+                
+            print(f"Processing parameter file: {file_path}")
+            
+            # Read the file content
+            with open(file_path, 'r') as f:
+                content = f.read()
+            
+            # Check if the file contains secrets
+            if 'secrets.' not in content:
+                print("No secrets found in parameter file")
+                return file_path
+                
+            # Replace secrets in the content
+            processed_content = replace_secrets(content)
+            
+            # Only create a new file if content changed
+            if processed_content != content:
+                proc_file = temp_dir / f"processed_{os.path.basename(file_path)}"
+                with open(proc_file, 'w') as f:
+                    f.write(processed_content)
+                print(f"Created processed parameter file: {proc_file}")
+                return str(proc_file)
+            
+            return file_path
+
+        def process_inline_parameters(params):
+            """Process inline parameters in either array or object format"""
+            if not params:
+                return params
+                
+            # Check if we have inline parameters
+            if 'inline-parameters' not in params:
+                return params
+                
+            inline_params = params['inline-parameters']
+            
+            # Skip if not a format we recognize or no secrets present
+            if not inline_params or (isinstance(inline_params, str) and 'secrets.' not in inline_params):
+                return params
+                
+            print("Processing inline parameters")
+            
+            # Handle array format (list of dicts with ParameterKey/ParameterValue)
+            if isinstance(inline_params, list):
+                for item in inline_params:
+                    if isinstance(item, dict) and 'ParameterValue' in item:
+                        value = item['ParameterValue']
+                        if isinstance(value, str) and 'secrets.' in value:
+                            item['ParameterValue'] = replace_secrets(value)
+            
+            # Handle object format (simple key/value pairs)
+            elif isinstance(inline_params, dict):
+                for key, value in inline_params.items():
+                    if isinstance(value, str) and 'secrets.' in value:
+                        inline_params[key] = replace_secrets(value)
+            
+            # Update the parameters with processed inline params
+            params['inline-parameters'] = inline_params
+            return params
+
+        def process_parameters(params):
+            """Process both parameter file and inline parameters"""
+            if not process_secrets or not params:
+                return params
+                
+            # Convert to dict if it's a string (JSON)
+            if isinstance(params, str):
+                try:
+                    params = json.loads(params)
+                except json.JSONDecodeError:
+                    print(f"Error parsing parameters JSON: {params}")
+                    return params
+            
+            # Process parameter file if present
+            if 'parameter-file' in params and params['parameter-file']:
+                processed_file = process_parameter_file(params['parameter-file'])
+                params['parameter-file'] = processed_file
+            
+            # Process inline parameters
+            params = process_inline_parameters(params)
+            
+            return params
+
         # Process each resource path
-        for RESOURCE_PATH in "${RESOURCE_PATHS[@]}"; do
-          echo "Processing resource path: $RESOURCE_PATH"
-          
-          # Try both YAML and YML extensions
-          CONFIG_PATH="${RESOURCE_PATH}/deployment-config.yaml"
-          if [[ ! -f "$CONFIG_PATH" ]]; then
-            CONFIG_PATH="${RESOURCE_PATH}/deployment-config.yml"
-            if [[ ! -f "$CONFIG_PATH" ]]; then
-              echo "::warning::Configuration file not found for $RESOURCE_PATH"
-              continue
-            fi
-          fi
-          
-          # Read YAML config file and convert to JSON for processing
-          echo "Reading YAML configuration from $CONFIG_PATH"
-          CONFIG_CONTENT=$(yq -o=json eval . "$CONFIG_PATH")
-          
-          # Extract app and resource from path
-          APP=$(dirname "$RESOURCE_PATH")
-          RESOURCE=$(basename "$RESOURCE_PATH")
-          
-          echo "Using APP=$APP and RESOURCE=$RESOURCE"
-          
-          # Validate JSON structure
-          echo "$CONFIG_CONTENT" | jq . > /dev/null 2>&1
-          if [[ $? -ne 0 ]]; then
-            echo "::warning::Invalid YAML structure in $CONFIG_PATH"
-            continue
-          fi
-          
-          # Get environments list
-          ENVIRONMENTS=$(echo "$CONFIG_CONTENT" | jq -r '.deployments[0].environments[]' 2>/dev/null || echo "")
-          if [[ -z "$ENVIRONMENTS" ]]; then
-            echo "::warning::No environments found in $CONFIG_PATH"
-            continue
-          fi
-          
-          echo "Found environments: $ENVIRONMENTS"
-          
-          # Filter by specific environment if provided
-          if [[ "${{ inputs.specific_environment }}" != "" ]]; then
-            if echo "$ENVIRONMENTS" | grep -q "${{ inputs.specific_environment }}"; then
-              ENVIRONMENTS="${{ inputs.specific_environment }}"
-            else
-              echo "::warning::Specified environment not found in $CONFIG_PATH"
-              continue
-            fi
-          fi
-          
-          # Process each environment for this resource
-          for ENV in $ENVIRONMENTS; do
-            echo "Processing environment: $ENV for $RESOURCE_PATH"
+        for resource_path in resource_paths:
+            resource_path = resource_path.strip()
+            if not resource_path:
+                continue
+                
+            print(f"Processing resource path: {resource_path}")
             
-            # Extract parameters as compact JSON (no newlines)
-            PARAMS=$(echo "$CONFIG_CONTENT" | jq -c --arg env "$ENV" '.deployments[0].parameters[$env]')
-            RUNNER=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].runners[$env]')
-            GH_ENV=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].github_environments[$env]')
-            AWS_REGION=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_regions[$env]')
-            AWS_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_role_secrets[$env] // "AWS_ROLE_TO_ASSUME"')
-            CFN_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].cfn_role_secrets[$env] // "CFN_ROLE_ARN"')
-            IAM_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].iam_execution_role_secrets[$env] // "IAM_EXECUTION_ROLE_ARN"')
-            VARS_CONFIG=$(echo "$CONFIG_CONTENT" | jq -c --arg env "$ENV" '.deployments[0].github_vars[$env] // {}')
+            # Try both YAML and YML extensions
+            config_path = os.path.join(resource_path, "deployment-config.yaml")
+            if not os.path.isfile(config_path):
+                config_path = os.path.join(resource_path, "deployment-config.yml")
+                if not os.path.isfile(config_path):
+                    print(f"Warning: Configuration file not found for {resource_path}")
+                    continue
             
-            # Skip if any required field is empty
-            if [[ -z "$PARAMS" || "$PARAMS" == "null" || -z "$RUNNER" || "$RUNNER" == "null" || 
-                  -z "$GH_ENV" || "$GH_ENV" == "null" || -z "$AWS_REGION" || "$AWS_REGION" == "null" ]]; then
-              echo "::warning::Missing required configuration for $RESOURCE_PATH in $ENV environment"
-              continue
-            fi
+            # Read YAML config file and convert to JSON
+            print(f"Reading YAML configuration from {config_path}")
+            try:
+                result = subprocess.run(['yq', '-o=json', 'eval', '.', config_path], 
+                                      capture_output=True, text=True, check=True)
+                config_content = result.stdout
+                config_json = json.loads(config_content)
+            except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
+                print(f"Error processing config file {config_path}: {e}")
+                continue
             
-            # Process secrets in parameters if enabled
-            PROCESSED_PARAMS=$(process_secrets_in_json "$PARAMS")
+            # Extract app and resource from path
+            app = os.path.dirname(resource_path)
+            resource = os.path.basename(resource_path)
             
-            # Create matrix item (all on one line)
-            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"github_vars\":$VARS_CONFIG,\"parameters\":$PROCESSED_PARAMS}"
+            print(f"Using APP={app} and RESOURCE={resource}")
             
-            # Add to appropriate matrix based on environment
-            if [[ "$ENV" == "dev" ]]; then
-              DEV_MATRIX_ITEMS+=("$MATRIX_ITEM")
-            elif [[ "$ENV" == "int" ]]; then
-              INT_MATRIX_ITEMS+=("$MATRIX_ITEM")
-            elif [[ "$ENV" == "prod" ]]; then
-              PROD_MATRIX_ITEMS+=("$MATRIX_ITEM")
-            fi
-          done
-        done
+            # Get environments list
+            environments = []
+            try:
+                environments = config_json['deployments'][0]['environments']
+            except (KeyError, IndexError):
+                print(f"Warning: No environments found in {config_path}")
+                continue
+            
+            print(f"Found environments: {environments}")
+            
+            # Filter by specific environment if provided
+            if specific_environment:
+                if specific_environment in environments:
+                    environments = [specific_environment]
+                else:
+                    print(f"Warning: Specified environment {specific_environment} not found in {config_path}")
+                    continue
+            
+            # Process each environment for this resource
+            for env in environments:
+                print(f"Processing environment: {env} for {resource_path}")
+                
+                try:
+                    # Extract parameters
+                    params = config_json['deployments'][0]['parameters'].get(env, {})
+                    runner = config_json['deployments'][0]['runners'].get(env)
+                    gh_env = config_json['deployments'][0]['github_environments'].get(env)
+                    aws_region = config_json['deployments'][0]['aws_regions'].get(env)
+                    aws_role_secret = config_json['deployments'][0]['aws_role_secrets'].get(env, "AWS_ROLE_TO_ASSUME")
+                    cfn_role_secret = config_json['deployments'][0]['cfn_role_secrets'].get(env, "CFN_ROLE_ARN")
+                    iam_role_secret = config_json['deployments'][0]['iam_execution_role_secrets'].get(env, "IAM_EXECUTION_ROLE_ARN")
+                    vars_config = config_json['deployments'][0]['github_vars'].get(env, {})
+                    
+                    # Skip if any required field is empty
+                    if not params or not runner or not gh_env or not aws_region:
+                        print(f"Warning: Missing required configuration for {resource_path} in {env} environment")
+                        continue
+                    
+                    # Process secrets in parameters
+                    processed_params = process_parameters(params)
+                    
+                    # Create matrix item
+                    matrix_item = {
+                        "application": app,
+                        "resource": resource,
+                        "environment": env,
+                        "runner": runner,
+                        "github_environment": gh_env,
+                        "aws_region": aws_region,
+                        "aws_role_secret": aws_role_secret,
+                        "cfn_role_secret": cfn_role_secret,
+                        "iam_role_secret": iam_role_secret,
+                        "github_vars": vars_config,
+                        "parameters": processed_params
+                    }
+                    
+                    # Add to appropriate matrix based on environment
+                    if env == "dev":
+                        dev_matrix_items.append(matrix_item)
+                    elif env == "int":
+                        int_matrix_items.append(matrix_item)
+                    elif env == "prod":
+                        prod_matrix_items.append(matrix_item)
+                
+                except Exception as e:
+                    print(f"Error processing environment {env}: {e}")
+                    continue
         
         # Construct environment-specific matrices
-        if [ ${#DEV_MATRIX_ITEMS[@]} -eq 0 ]; then
-          DEV_MATRIX_JSON="{\"include\":[]}"
-        else
-          DEV_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${DEV_MATRIX_ITEMS[*]}")]}";
-        fi
-        
-        if [ ${#INT_MATRIX_ITEMS[@]} -eq 0 ]; then
-          INT_MATRIX_JSON="{\"include\":[]}"
-        else
-          INT_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${INT_MATRIX_ITEMS[*]}")]}";
-        fi
-        
-        if [ ${#PROD_MATRIX_ITEMS[@]} -eq 0 ]; then
-          PROD_MATRIX_JSON="{\"include\":[]}"
-        else
-          PROD_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${PROD_MATRIX_ITEMS[*]}")]}";
-        fi
+        dev_matrix = {"include": dev_matrix_items}
+        int_matrix = {"include": int_matrix_items}
+        prod_matrix = {"include": prod_matrix_items}
         
         # Verify JSON is valid
-        echo "$DEV_MATRIX_JSON" | jq . > /dev/null 2>&1
-        echo "$INT_MATRIX_JSON" | jq . > /dev/null 2>&1
-        echo "$PROD_MATRIX_JSON" | jq . > /dev/null 2>&1
+        try:
+            dev_matrix_json = json.dumps(dev_matrix)
+            int_matrix_json = json.dumps(int_matrix)
+            prod_matrix_json = json.dumps(prod_matrix)
+        except Exception as e:
+            print(f"Error serializing matrices to JSON: {e}")
+            exit(1)
         
         # Write matrices to outputs
-        echo "dev_matrix<<EOF" >> $GITHUB_OUTPUT
-        echo "$DEV_MATRIX_JSON" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-        
-        echo "int_matrix<<EOF" >> $GITHUB_OUTPUT
-        echo "$INT_MATRIX_JSON" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-        
-        echo "prod_matrix<<EOF" >> $GITHUB_OUTPUT
-        echo "$PROD_MATRIX_JSON" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write("dev_matrix<<EOF\n")
+            f.write(dev_matrix_json + "\n")
+            f.write("EOF\n")
+            
+            f.write("int_matrix<<EOF\n")
+            f.write(int_matrix_json + "\n")
+            f.write("EOF\n")
+            
+            f.write("prod_matrix<<EOF\n")
+            f.write(prod_matrix_json + "\n")
+            f.write("EOF\n")
+            
+        print(f"Generated matrices: DEV({len(dev_matrix_items)}), INT({len(int_matrix_items)}), PROD({len(prod_matrix_items)})")

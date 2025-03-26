@@ -102,8 +102,7 @@ def main():
             # Process each inline parameter
             for param in inline_params:
                 key = param["ParameterKey"]
-                
-                # Обробка плейсхолдера SECRET:
+
                 if isinstance(param["ParameterValue"], str) and param["ParameterValue"].startswith("SECRET:"):
                     secret_name = param["ParameterValue"].replace("SECRET:", "")
                     if secret_name in github_secrets:
@@ -154,7 +153,6 @@ def load_github_secrets():
     """
     secrets = {}
     
-    # Спочатку перевіряємо, чи є шлях до файлу з секретами
     secrets_path = os.environ.get('GITHUB_SECRETS_PATH', '')
     if secrets_path and os.path.exists(secrets_path):
         try:
@@ -162,7 +160,6 @@ def load_github_secrets():
                 secrets = json.load(f)
             logger.info(f"{BLUE}Loaded secrets from file: {secrets_path}{RESET}")
             logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
-            # Видаляємо файл після зчитування для безпеки
             try:
                 os.remove(secrets_path)
                 logger.info(f"{BLUE}Removed secrets file after reading{RESET}")
@@ -172,7 +169,6 @@ def load_github_secrets():
         except Exception as e:
             logger.error(f"Error reading secrets from file: {e}")
     
-    # Якщо файл недоступний, спробуйте через GITHUB_SECRETS змінну
     try:
         secrets_json = os.environ.get('GITHUB_SECRETS', '{}')
         secrets = json.loads(secrets_json)
@@ -181,14 +177,11 @@ def load_github_secrets():
     except json.JSONDecodeError as e:
         logger.error(f"Error parsing GITHUB_SECRETS JSON: {e}")
     
-    # Якщо секрети ще не знайдені, збираємо всі змінні середовища
     if not secrets:
         logger.info(f"{YELLOW}No secrets found via preferred methods, using environment variables{RESET}")
         
-        # Додаємо всі змінні середовища (потенційно містять секрети)
         env_var_count = 0
         for key, value in os.environ.items():
-            # Пропускаємо службові змінні середовища GitHub Actions
             if not key.startswith('GITHUB_') and not key.startswith('INPUT_'):
                 secrets[key] = value
                 env_var_count += 1

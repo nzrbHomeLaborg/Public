@@ -42,5 +42,6 @@ runs:
         
     - name: Generate deployment matrices
       id: generate-matrices
+      shell: bash
       run: |
         python .github/scripts/matrix_generator.py --resource-paths "${{ inputs.resource_paths }}" --specific-environment "${{ inputs.specific_environment }}"

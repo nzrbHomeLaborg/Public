@@ -110,14 +110,17 @@ runs:
           PARAMETER_OVERRIDES="--parameter-overrides file://${{ inputs.parameter-file }}"
         fi
         
-        # Process inline parameters if provided - these should have secrets already resolved
+        # Process inline parameters if provided - GitHub secrets should be resolved at this point
         if [[ -n "${{ inputs.inline-parameters }}" && "${{ inputs.inline-parameters }}" != "{}" ]]; then
-          echo "Using inline parameters (secrets redacted)"
+          echo "Using inline parameters (secrets redacted for security)"
           
           # Parse the JSON and create parameter overrides
           # We'll create a temporary file to hold parameters for the AWS CLI
           INLINE_PARAMS_FILE=$(mktemp)
           echo "${{ inputs.inline-parameters }}" > "$INLINE_PARAMS_FILE"
+          
+          # Debug info without exposing secrets (just parameter keys)
+          echo "Parameter keys: $(jq -r 'map(.ParameterKey) | join(", ")' "$INLINE_PARAMS_FILE")"
           
           # If we already have parameters from a file, we'll combine them
           if [[ -n "$PARAMETER_OVERRIDES" ]]; then

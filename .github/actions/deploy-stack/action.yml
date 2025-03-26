@@ -138,6 +138,100 @@ runs:
         ls
         cat ${{ inputs.parameter-file }}
 
+    - name: Process Parameters
+      id: process-params
+      shell: bash
+      run: |
+        # Create temp directory
+        TEMP_DIR="${{ runner.temp }}/cfn-params"
+        mkdir -p "$TEMP_DIR"
+        
+        # Process parameter file
+        PARAM_FILE="${{ matrix.parameters.parameter-file }}"
+        PROCESSED_PARAM_FILE=""
+        
+        if [[ -n "$PARAM_FILE" && "$PARAM_FILE" != "null" ]]; then
+          echo "Processing parameter file: $PARAM_FILE"
+          if [[ -f "$PARAM_FILE" ]]; then
+            CONTENT=$(cat "$PARAM_FILE")
+            
+            # Check for secrets pattern more safely
+            if echo "$CONTENT" | grep -q "secrets\."; then
+              echo "Secrets found in parameter file, processing them"
+              
+              # Create processed file
+              PROCESSED_PARAM_FILE="$TEMP_DIR/processed-params.json"
+              cp "$PARAM_FILE" "$PROCESSED_PARAM_FILE"
+              
+              # Get list of all secrets
+              ALL_SECRETS=$(env | grep "^SECRETS_" | cut -d= -f1)
+              
+              # Replace each secret
+              for SECRET_VAR in $ALL_SECRETS; do
+                # Get the actual secret name without the SECRETS_ prefix
+                SECRET_NAME=${SECRET_VAR#SECRETS_}
+                
+                # Get the secret value
+                SECRET_VALUE=${!SECRET_VAR}
+                
+                # Construct the pattern to look for
+                PATTERN="\\\${{[[:space:]]*secrets\\.$SECRET_NAME[[:space:]]*}}"
+                
+                # Replace in the file
+                sed -i "s|$PATTERN|$SECRET_VALUE|g" "$PROCESSED_PARAM_FILE"
+              done
+              
+              echo "Parameter file processed: $PROCESSED_PARAM_FILE"
+            else
+              echo "No secrets found in parameter file, using original file"
+              PROCESSED_PARAM_FILE="$PARAM_FILE"
+            fi
+          else
+            echo "WARNING: Parameter file not found: $PARAM_FILE"
+            PROCESSED_PARAM_FILE="$PARAM_FILE"
+          fi
+        fi
+        
+        # Process inline parameters
+        INLINE_PARAMS='${{ toJSON(matrix.parameters.inline-parameters) }}'
+        PROCESSED_INLINE_PARAMS="$INLINE_PARAMS"
+        
+        if [[ "$INLINE_PARAMS" != "null" && -n "$INLINE_PARAMS" ]]; then
+          echo "Processing inline parameters"
+          
+          # Check for secrets pattern more safely
+          if echo "$INLINE_PARAMS" | grep -q "secrets\."; then
+            echo "Secrets found in inline parameters, processing them"
+            
+            # Get list of all secrets
+            ALL_SECRETS=$(env | grep "^SECRETS_" | cut -d= -f1)
+            
+            # Replace each secret
+            for SECRET_VAR in $ALL_SECRETS; do
+              # Get the actual secret name without the SECRETS_ prefix
+              SECRET_NAME=${SECRET_VAR#SECRETS_}
+              
+              # Get the secret value
+              SECRET_VALUE=${!SECRET_VAR}
+              
+              # Construct the pattern to look for
+              PATTERN="\\\${{[[:space:]]*secrets\\.$SECRET_NAME[[:space:]]*}}"
+              
+              # Replace in the inline params
+              PROCESSED_INLINE_PARAMS=$(echo "$PROCESSED_INLINE_PARAMS" | sed "s|$PATTERN|$SECRET_VALUE|g")
+            done
+            
+            echo "Inline parameters processed"
+          else
+            echo "No secrets found in inline parameters"
+          fi
+        fi
+        
+        # Set outputs
+        echo "param_file=$PROCESSED_PARAM_FILE" >> $GITHUB_OUTPUT
+        echo "inline_params=$PROCESSED_INLINE_PARAMS" >> $GITHUB_OUTPUT
+
+
 
     - name: Create GitHub Release
       if: ${{ inputs.create-release == 'true' }}

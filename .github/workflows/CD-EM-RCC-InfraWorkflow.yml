@@ -95,7 +95,7 @@ jobs:
           cat /tmp/github_secrets.json
           echo "Set up secrets for parameter processing using file method"     
      
-          - name: Deploy Stack
+      - name: Deploy Stack
         uses: ./.github/actions/composite
         with:
           environment: ${{ matrix.environment }}

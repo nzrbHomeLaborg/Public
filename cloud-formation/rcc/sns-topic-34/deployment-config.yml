@@ -32,4 +32,4 @@ deployments:
           - ParameterKey: TopicName
             ParameterValue: a-crs-CloudWatch-Alarms-dev-test
           - ParameterKey: email
-            ParameterValue: "${{ secrets.SNS_EMAI }}"
+            ParameterValue: "${{ secrets.NZRB }}"

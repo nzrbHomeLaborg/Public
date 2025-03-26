@@ -1,5 +1,5 @@
 name: 'Generate Combined Deployment Matrices'
-description: 'Parses multiple deployment config files and generates combined matrices with dynamic secret processing'
+description: 'Parses multiple deployment config files and generates combined matrices with secret processing'
 inputs:
   resource_paths:
     description: 'Comma-separated paths to resources (e.g., cloud-formation/rcc/a-crs-spa,cloud-formation/rcc/another-resource)'
@@ -49,98 +49,132 @@ runs:
         INT_MATRIX_ITEMS=()
         PROD_MATRIX_ITEMS=()
         
-        # Function to extract secret names from a string
-        extract_secret_names() {
-          local content="$1"
-          local temp_file="/tmp/secret-extract-$RANDOM.txt"
-          local SECRET_PATTERN='\${{[[:space:]]*secrets\.[A-Za-z0-9_-]*[[:space:]]*}}'
+        # Process secrets in a string - replace any ${{ secrets.X }} with actual value
+        process_secrets_string() {
+          local str="$1"
+          local modified_str="$str"
           
-          # Extract everything that looks like ${{ secrets.SOMETHING }}
-          echo "$content" | grep -o "$SECRET_PATTERN" | sort -u > "$temp_file"
-          
-          # Extract just the secret names
-          if [[ -s "$temp_file" ]]; then
-            cat "$temp_file" | sed -E 's/.*secrets\.([A-Za-z0-9_-]*).*}}/\1/g'
+          # Only process if feature enabled and string contains the secrets keyword
+          if [[ "${{ inputs.process_secrets }}" != "true" || "$str" != *"secrets."* ]]; then
+            echo "$str"
+            return
           fi
           
-          rm -f "$temp_file"
+          # Extract potential secret references
+          local secrets_list
+          secrets_list=$(echo "$str" | grep -o '\${{.*secrets\.[^}]*}}' || echo "")
+          
+          # Process each secret reference
+          if [[ -n "$secrets_list" ]]; then
+            echo "Found secrets to process..."
+            while IFS= read -r secret_ref; do
+              # Extract just the secret name
+              local secret_name
+              secret_name=$(echo "$secret_ref" | sed -E 's/.*secrets\.([A-Za-z0-9_-]*).*/\1/')
+              
+              # Get the value from environment variables
+              if [[ -n "$secret_name" ]]; then
+                local secret_value="${!secret_name}"
+                if [[ -n "$secret_value" ]]; then
+                  echo "Replacing secret: $secret_name"
+                  # Replace in the string (using | as delimiter to avoid issues with / in paths)
+                  modified_str=$(echo "$modified_str" | sed "s|$secret_ref|$secret_value|g")
+                else
+                  echo "Warning: Secret $secret_name not available in environment"
+                fi
+              fi
+            done <<< "$secrets_list"
+          fi
+          
+          echo "$modified_str"
         }
         
-        # Function to process secrets in a JSON string
+        # Process secrets in a JSON object
         process_secrets_in_json() {
           local json_str="$1"
           
           # Only process if feature enabled
-          if [[ "${{ inputs.process_secrets }}" != "true" ]]; then
+          if [[ "${{ inputs.process_secrets }}" != "true" || "$json_str" != *"secrets."* ]]; then
             echo "$json_str"
             return
           fi
           
-          # Check if the content contains any secrets pattern
-          if [[ "$json_str" == *'${{' && "$json_str" == *'secrets.' && "$json_str" == *'}}' ]]; then
-            echo "Found secrets pattern in parameters, processing..."
+          echo "Processing secrets in parameters..."
+          
+          # Process parameter-file if present
+          local pf=$(echo "$json_str" | jq -r '.["parameter-file"] // ""')
+          if [[ -n "$pf" && "$pf" != "null" && -f "$pf" ]]; then
+            echo "Processing parameter file: $pf"
+            local temp_dir="/tmp/matrix-params"
+            mkdir -p "$temp_dir"
+            local proc_file="$temp_dir/$(basename "$pf")"
             
-            # Extract secret names
-            local secret_names=$(extract_secret_names "$json_str")
+            # Process the file content
+            local file_content=$(cat "$pf")
+            local processed_content
+            processed_content=$(process_secrets_string "$file_content")
             
-            # Loop through each secret name
-            for secret_name in $secret_names; do
-              # Access the secret value from environment variables
-              # This is the key part - the environment variables should be available directly
-              local secret_value="${!secret_name}"
+            # Only create new file if content was modified
+            if [[ "$file_content" != "$processed_content" ]]; then
+              echo "$processed_content" > "$proc_file"
+              echo "Created processed parameter file: $proc_file"
+              # Update the path in JSON
+              json_str=$(echo "$json_str" | jq --arg path "$proc_file" '.["parameter-file"]=$path')
+            else
+              echo "No changes needed in parameter file"
+            fi
+          fi
+          
+          # Process inline-parameters if present
+          if echo "$json_str" | jq -e '.["inline-parameters"]' >/dev/null 2>&1; then
+            echo "Processing inline-parameters..."
+            
+            # Check if it's an array or object
+            local inline_type
+            inline_type=$(echo "$json_str" | jq -r 'if .["inline-parameters"] | type == "array" then "array" else "object" end')
+            
+            if [[ "$inline_type" == "array" ]]; then
+              # Handle array format (with ParameterKey/ParameterValue)
+              local item_count
+              item_count=$(echo "$json_str" | jq '.["inline-parameters"] | length')
               
-              if [[ -n "$secret_value" ]]; then
-                echo "Processing secret: $secret_name"
-                # Replace all occurrences of the secret reference with its value
-                # We use a safe pattern that should work in YAML
-                local REPLACE_PATTERN='\${{[[:space:]]*secrets\.'$secret_name'[[:space:]]*}}'
-                json_str=$(echo "$json_str" | sed "s|$REPLACE_PATTERN|$secret_value|g")
-              else
-                echo "Warning: Secret $secret_name not available in environment"
-              fi
-            done
-            
-            # Process parameter-file if present
-            local pf=$(echo "$json_str" | jq -r '.["parameter-file"] // ""')
-            
-            if [[ -n "$pf" && "$pf" != "null" && -f "$pf" ]]; then
-              echo "Processing secrets in parameter file: $pf"
-              local temp_dir="/tmp/matrix-params"
-              mkdir -p "$temp_dir"
-              local proc_file="$temp_dir/$(basename "$pf")"
-              
-              # Read the file content
-              local file_content=$(cat "$pf")
-              
-              # Check if file contains secrets
-              if [[ "$file_content" == *'${{' && "$file_content" == *'secrets.' && "$file_content" == *'}}' ]]; then
-                # Extract secret names from file
-                local file_secret_names=$(extract_secret_names "$file_content")
+              # Process each item
+              for ((i=0; i<item_count; i++)); do
+                local param_value
+                param_value=$(echo "$json_str" | jq -r --argjson idx "$i" '.["inline-parameters"][$idx].ParameterValue')
                 
-                # Process each secret
-                for secret_name in $file_secret_names; do
-                  local secret_value="${!secret_name}"
+                # Only process string values that contain secrets
+                if [[ -n "$param_value" && "$param_value" == *"secrets."* ]]; then
+                  local processed_value
+                  processed_value=$(process_secrets_string "$param_value")
                   
-                  if [[ -n "$secret_value" ]]; then
-                    echo "Processing secret in file: $secret_name"
-                    local FILE_REPLACE_PATTERN='\${{[[:space:]]*secrets\.'$secret_name'[[:space:]]*}}'
-                    file_content=$(echo "$file_content" | sed "s|$FILE_REPLACE_PATTERN|$secret_value|g")
-                  else
-                    echo "Warning: Secret $secret_name not available for parameter file"
+                  # Update the value if changed
+                  if [[ "$param_value" != "$processed_value" ]]; then
+                    json_str=$(echo "$json_str" | jq --argjson idx "$i" --arg val "$processed_value" '.["inline-parameters"][$idx].ParameterValue=$val')
                   fi
-                done
+                fi
+              done
+            else
+              # Handle object format (key/value pairs)
+              local keys
+              keys=$(echo "$json_str" | jq -r '.["inline-parameters"] | keys[]')
+              
+              # Process each key
+              for key in $keys; do
+                local value
+                value=$(echo "$json_str" | jq -r --arg k "$key" '.["inline-parameters"][$k]')
                 
-                # Write processed content to new file
-                echo "$file_content" > "$proc_file"
-                
-                # Update the parameter-file path in the JSON
-                json_str=$(echo "$json_str" | jq --arg path "$proc_file" '.["parameter-file"]=$path')
-              else
-                # No secrets in file, just use original
-                echo "No secrets found in parameter file"
-                cp "$pf" "$proc_file"
-                json_str=$(echo "$json_str" | jq --arg path "$proc_file" '.["parameter-file"]=$path')
-              fi
+                # Only process string values that contain secrets
+                if [[ -n "$value" && "$value" == *"secrets."* ]]; then
+                  local processed_value
+                  processed_value=$(process_secrets_string "$value")
+                  
+                  # Update the value if changed
+                  if [[ "$value" != "$processed_value" ]]; then
+                    json_str=$(echo "$json_str" | jq --arg k "$key" --arg val "$processed_value" '.["inline-parameters"][$k]=$val')
+                  fi
+                fi
+              done
             fi
           fi
           

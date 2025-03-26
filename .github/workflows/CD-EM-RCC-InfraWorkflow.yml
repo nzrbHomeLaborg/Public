@@ -92,7 +92,7 @@ jobs:
         run: |
           echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
           echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
-          cat /tmp/github_secrets.json
+          echo "cat /tmp/github_secrets.json"
           echo "Set up secrets for parameter processing using file method"     
      
           - name: Deploy Stack

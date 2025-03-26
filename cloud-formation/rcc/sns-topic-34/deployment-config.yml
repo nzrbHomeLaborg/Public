@@ -9,7 +9,7 @@ deployments:
     aws_regions:
       dev: us-east-1
     aws_role_secrets:
-      dev: AWS_ROLE_TO_ASSUME
+      dev: AWS_CRS_ROLE_TO_ASSUME
     cfn_role_secrets:
       dev: CFN_ROLE_ARN
     iam_execution_role_secrets:
@@ -22,10 +22,10 @@ deployments:
         stack-name: 'a-crs-sns-dev-test'
         bucket-name: 'nzrb-home-test'
         bucket-upload: 'true'
-        target-folder: cloud-formation/rcc/a-crs-sns
-        source-folder: cloud-formation/rcc/a-crs-sns
+        target-folder: cloud-formation/rcc/a-crs-sns-34
+        source-folder: cloud-formation/rcc/a-crs-sns-34
         # filename-patterns: "*.yaml"
-        template-name: 'a-crs-sns.yaml'
+        template-name: 'template.yaml'
         inline-parameters:
           - ParameterKey: TopicName
             ParameterValue: a-crs-CloudWatch-Alarms-dev-test

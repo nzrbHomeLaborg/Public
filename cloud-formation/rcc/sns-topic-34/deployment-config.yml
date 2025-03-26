@@ -4,7 +4,7 @@ deployments:
       - int
       - prod
       - stg
-      - int-dr
+      - int-dr12
     runners:
       dev: custom
       int: custom

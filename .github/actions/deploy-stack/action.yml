@@ -135,6 +135,7 @@ runs:
         echo "  - aws-role-to-assume: ${{ inputs.aws-role-to-assume }}"
         echo "  - cfn-role-arn: ${{ inputs.cfn-role-arn }}"
         echo "  - iam-execution-role-arn: ${{ inputs.iam-execution-role-arn }}"
+        ls
         cat ${{ inputs.parameter-file }}
 
 

@@ -6,69 +6,55 @@ from pathlib import Path
 import re
 
 def main():
-    """
-    Process CloudFormation tags from both JSON input and key=value pairs,
-    and verify that tags are provided according to guidelines.
-    """
+    
     github_run_id = os.environ.get('GITHUB_RUN_ID', '')
     github_run_number = os.environ.get('GITHUB_RUN_NUMBER', '')
+    
+    # Get tags from environment variables
     tags_json = os.environ.get('INPUT_TAGS', '')
     tags_key_value = os.environ.get('INPUT_TAGS_KEY_VALUE', '')
     
     # Initialize empty tags list
     combined_tags = []
     
-    # Process key=value format tags first
-    if tags_key_value:
-        # Process each line in the key=value input
-        for line in tags_key_value.splitlines():
-            line = line.strip()
-            
-            # Skip empty lines and comment lines
-            if not line or line.startswith('#'):
-                continue
-                
-            # Split the line by the first '=' and create a tag
-            if '=' in line:
-                key, value = line.split('=', 1)
-                
-                # Strip quotes from key and value
-                key = key.strip()
-                value = value.strip()
-                
-                # Remove surrounding quotes (both single and double)
-                value = re.sub(r'^["\'](.*)["\']$', r'\1', value)
-                
-                combined_tags.append({
-                    "Key": key,
-                    "Value": value
-                })
-    
-    # Process direct JSON tags input second (will override duplicates)
+    # Process direct JSON tags input first
     if tags_json:
         try:
-            # Parse JSON tags
             json_tags = json.loads(tags_json)
+            combined_tags.extend(json_tags)
+        except json.JSONDecodeError:
+            pass
+    
+    # Process key-value pair tags second (will override JSON tags)
+    if tags_key_value:
+        existing_tags = {tag["Key"]: i for i, tag in enumerate(combined_tags)}
+        
+        for line in tags_key_value.splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
             
-            # Create a dictionary of existing tags for easy lookup
-            existing_tags = {tag["Key"]: i for i, tag in enumerate(combined_tags)}
-            
-            # Process each JSON tag
-            for tag in json_tags:
-                key = tag["Key"]
+            if '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                value = re.sub(r'^["\'](.*)["\']$', r'\1', value)
+                
+                # If the key already exists, replace the existing tag
                 if key in existing_tags:
-                    # Override existing tag
-                    combined_tags[existing_tags[key]] = tag
+                    combined_tags[existing_tags[key]] = {
+                        "Key": key,
+                        "Value": value
+                    }
                 else:
                     # Add new tag
-                    combined_tags.append(tag)
-        except json.JSONDecodeError:
-            # If JSON parsing fails, just use what we have from key=value
-            pass
+                    combined_tags.append({
+                        "Key": key,
+                        "Value": value
+                    })
     
     # Check if any tags were provided
     if not combined_tags:
-        # No tags provided - this is an error condition
         error_message = "No tags are provided for this stack. Please follow the AWS tagging guidelines (https://catdigital.atlassian.net/wiki/spaces/CD/pages/105349296/AWS+Tagging)."
         print(f"\033[31m{error_message}\033[0m", file=sys.stderr)
         sys.exit(1)

@@ -115,6 +115,7 @@ runs:
             CFN_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].cfn_role_secrets[$env] // "CFN_ROLE_ARN"')
             IAM_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].iam_execution_role_secrets[$env] // "IAM_EXECUTION_ROLE_ARN"')
             DEPENDS_ON=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].dependsOn // ""')
+            VARS_CONFIG=$(echo "$CONFIG_CONTENT" | jq -c --arg env "$ENV" '.deployments[0].github_vars[$env] // {}')
 
             # Check if custom deployment is enabled for this environment
             CUSTOM_DEPLOYMENT=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].custom_deployment // "false"')
@@ -127,52 +128,9 @@ runs:
               continue
             fi
             
-            # Check if we have inline parameters that might contain GitHub expressions
-            if echo "$PARAMS" | grep -q "inline-parameters"; then
-              # We need special handling for inline parameters with GitHub expressions
-              # For each parameter that contains ${{ secrets. }}, we'll create a separate secret reference
-              
-              # First, extract all the inline parameters
-              INLINE_PARAMS=$(echo "$PARAMS" | jq -c '.inline-parameters')
-              
-              if [[ "$INLINE_PARAMS" != "null" && "$INLINE_PARAMS" != "[]" ]]; then
-                # Create a mapping of parameter keys to secret references
-                SECRET_MAPPING="{}"
-                
-                # Process each inline parameter
-                LENGTH=$(echo "$INLINE_PARAMS" | jq 'length')
-                for i in $(seq 0 $(($LENGTH - 1))); do
-                  PARAM_KEY=$(echo "$INLINE_PARAMS" | jq -r ".[$i].ParameterKey")
-                  PARAM_VALUE=$(echo "$INLINE_PARAMS" | jq -r ".[$i].ParameterValue")
-                  
-                  # Check if the parameter value contains a GitHub expression for secrets
-                  if [[ "$PARAM_VALUE" == *'${{ secrets.'* ]]; then
-                    # Extract the secret name (e.g., NZRB from ${{ secrets.NZRB }})
-                    SECRET_NAME=$(echo "$PARAM_VALUE" | sed -n 's/.*\${{ *secrets\.\([^} ]*\) *}}.*/\1/p')
-                    if [[ -n "$SECRET_NAME" ]]; then
-                      # Add to secret mapping
-                      SECRET_MAPPING=$(echo "$SECRET_MAPPING" | jq --arg key "$PARAM_KEY" --arg secret "$SECRET_NAME" '. + {($key): $secret}')
-                      
-                      # Replace the GitHub expression with a placeholder
-                      INLINE_PARAMS=$(echo "$INLINE_PARAMS" | jq --arg i "$i" --arg key "$PARAM_KEY" '.[$i|tonumber].ParameterValue = "__SECRET_PLACEHOLDER__" + $key')
-                    fi
-                  fi
-                done
-                
-                # Update the parameters with modified inline parameters and add secret mapping
-                MODIFIED_PARAMS=$(echo "$PARAMS" | jq --argjson inlineParams "$INLINE_PARAMS" '.inline-parameters = $inlineParams')
-                MODIFIED_PARAMS=$(echo "$MODIFIED_PARAMS" | jq --argjson secretMap "$SECRET_MAPPING" '. + {secret_mapping: $secretMap}')
-                
-                # Create matrix item with the modified parameters
-                MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"parameters\":$MODIFIED_PARAMS}"
-              else
-                # No inline parameters, pass through as is
-                MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"parameters\":$PARAMS}"
-              fi
-            else
-              # No inline parameters, pass through as is
-              MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"parameters\":$PARAMS}"
-            fi
+            # Just pass through the parameters as-is
+            # The GitHub secrets will be resolved during workflow execution
+            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"github_vars\":$VARS_CONFIG,\"parameters\":$PARAMS}"
 
             # Add to appropriate matrix based on environment
             if [[ "$ENV" == "dev" ]]; then

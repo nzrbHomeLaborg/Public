@@ -22,7 +22,7 @@ def main():
     github_run_id = os.environ.get('GITHUB_RUN_ID', '')
     github_run_number = os.environ.get('GITHUB_RUN_NUMBER', '')
     parameter_file_path = os.environ.get('INPUT_PARAMETER_OVERRIDES', '')
-    inline_parameters = os.environ.get('INPUT_INLINE_JSON_PARAMETERS', '')
+    inline_parameters = os.environ.get('INPUT_INLINE_JSON_PARAMETERS', '').strip()
     
     tmp_path = f"/tmp/{github_run_id}{github_run_number}"
     param_file = f"{tmp_path}/cfn-parameter-{github_run_id}-{github_run_number}.json"
@@ -49,11 +49,14 @@ def main():
             logger.warning(f"Could not read parameters from file: {parameter_file_path}")
     
     # Process inline parameters if provided
-    if inline_parameters:
+    if inline_parameters and inline_parameters != 'null':
         logger.info(f"{BLUE}inline-json-parameters are available.{RESET}")
         
         try:
+            # Attempt to parse the inline parameters
             inline_params = json.loads(inline_parameters)
+            
+            # If it's not a list, convert to list of parameter dictionaries
             if not isinstance(inline_params, list):
                 inline_params_list = []
                 for key, value in inline_params.items():
@@ -62,20 +65,26 @@ def main():
                         "ParameterValue": value
                     })
                 inline_params = inline_params_list
+            
+            # Create a mapping of existing parameter keys
             existing_params = {param["ParameterKey"]: i for i, param in enumerate(combined_parameters)}
             
             # Process each inline parameter
             for param in inline_params:
                 key = param["ParameterKey"]
                 if key in existing_params:
+                    # Override existing parameter
                     combined_parameters[existing_params[key]] = param
                 else:
+                    # Add new parameter
                     combined_parameters.append(param)
                 
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing inline JSON parameters: {e}")
             logger.error(f"Raw value: {inline_parameters}")
-            sys.exit(1)
+            # Log the error but don't exit if file parameters exist
+            if not combined_parameters:
+                sys.exit(1)
     
     # Write the combined parameters to a file if we have any
     if combined_parameters:

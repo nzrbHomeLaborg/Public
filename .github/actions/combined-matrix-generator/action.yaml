@@ -1,5 +1,5 @@
 name: 'Generate Combined Deployment Matrices'
-description: 'Parses multiple deployment config files and generates combined matrices'
+description: 'Parses multiple deployment config files and generates combined matrices with dynamic secret processing'
 inputs:
   resource_paths:
     description: 'Comma-separated paths to resources (e.g., cloud-formation/rcc/a-crs-spa,cloud-formation/rcc/another-resource)'
@@ -8,6 +8,10 @@ inputs:
     description: 'Specific environment to deploy (empty for all configured)'
     required: false
     default: ''
+  process_secrets:
+    description: 'Process secrets in parameters (true/false)'
+    required: false
+    default: 'true'
 
 outputs:
   dev_matrix:
@@ -19,9 +23,6 @@ outputs:
   prod_matrix:
     description: 'Matrix for PROD deployments'
     value: ${{ steps.generate-matrices.outputs.prod_matrix }}
-  custom_matrix:
-    description: 'Matrix for custom deployments (stg, int-dr, etc)'
-    value: ${{ steps.generate-matrices.outputs.custom_matrix }}
 
 runs:
   using: "composite"
@@ -39,6 +40,27 @@ runs:
           sudo mv ${BINARY} /usr/bin/yq || mkdir -p $HOME/bin && mv ${BINARY} $HOME/bin/yq && echo "$HOME/bin" >> $GITHUB_PATH
         fi
 
+    - name: Prepare secrets map
+      id: prepare-secrets
+      shell: bash
+      run: |
+        # Create a directory to store extracted secret names
+        mkdir -p /tmp/secrets-data
+        
+        # Get all environment variables and filter those that are likely to be secrets
+        # GitHub Actions sets secrets as environment variables
+        env | grep -v "^GITHUB_" | grep -v "^RUNNER_" | grep -v "^PATH=" | sort > /tmp/secrets-data/env-vars.txt
+        
+        # Create a secrets map file to use for replacements
+        echo "# Secrets Map" > /tmp/secrets-data/secrets-map.txt
+        echo "# Format: SECRET_NAME|SECRET_VALUE" >> /tmp/secrets-data/secrets-map.txt
+        
+        # Log the number of potential secrets
+        SECRET_COUNT=$(cat /tmp/secrets-data/env-vars.txt | wc -l)
+        echo "Detected $SECRET_COUNT potential secret variables"
+        
+        echo "secrets_dir=/tmp/secrets-data" >> $GITHUB_OUTPUT
+
     - name: Generate deployment matrices
       id: generate-matrices
       shell: bash
@@ -47,7 +69,100 @@ runs:
         DEV_MATRIX_ITEMS=()
         INT_MATRIX_ITEMS=()
         PROD_MATRIX_ITEMS=()
-        CUSTOM_MATRIX_ITEMS=()
+        
+        # Function to extract secret names from a string
+        extract_secret_names() {
+          local content="$1"
+          local temp_file="/tmp/secret-extract-$RANDOM.txt"
+          
+          # Extract everything that looks like ${{ secrets.SOMETHING }}
+          echo "$content" | grep -o '\${{[[:space:]]*secrets\.[A-Za-z0-9_-]*[[:space:]]*}}' | sort -u > "$temp_file"
+          
+          # Extract just the secret names
+          if [[ -s "$temp_file" ]]; then
+            cat "$temp_file" | sed -E 's/.*secrets\.([A-Za-z0-9_-]*).*}}/\1/g'
+          fi
+          
+          rm -f "$temp_file"
+        }
+        
+        # Function to process secrets in a JSON string
+        process_secrets_in_json() {
+          local json_str="$1"
+          
+          # Only process if feature enabled
+          if [[ "${{ inputs.process_secrets }}" != "true" ]]; then
+            echo "$json_str"
+            return
+          fi
+          
+          # Check if the content contains any secrets pattern
+          if [[ "$json_str" == *"secrets."* ]]; then
+            echo "Found secrets pattern in parameters, processing..."
+            
+            # Extract secret names
+            local secret_names=$(extract_secret_names "$json_str")
+            
+            # Loop through each secret name
+            for secret_name in $secret_names; do
+              # Access the secret value from environment variables
+              local secret_value="${!secret_name}"
+              
+              if [[ -n "$secret_value" ]]; then
+                echo "Processing secret: $secret_name"
+                # Replace all occurrences of the secret reference with its value
+                # We use a safe pattern that should work in YAML
+                json_str=$(echo "$json_str" | sed "s|\\\${{[[:space:]]*secrets\.$secret_name[[:space:]]*}}|$secret_value|g")
+              else
+                echo "Warning: Secret $secret_name not available in environment"
+              fi
+            done
+            
+            # Process parameter-file if present
+            local pf=$(echo "$json_str" | jq -r '.["parameter-file"] // ""')
+            
+            if [[ -n "$pf" && "$pf" != "null" && -f "$pf" ]]; then
+              echo "Processing secrets in parameter file: $pf"
+              local temp_dir="/tmp/matrix-params"
+              mkdir -p "$temp_dir"
+              local proc_file="$temp_dir/$(basename "$pf")"
+              
+              # Read the file content
+              local file_content=$(cat "$pf")
+              
+              # Check if file contains secrets
+              if [[ "$file_content" == *"secrets."* ]]; then
+                # Extract secret names from file
+                local file_secret_names=$(extract_secret_names "$file_content")
+                
+                # Process each secret
+                for secret_name in $file_secret_names; do
+                  local secret_value="${!secret_name}"
+                  
+                  if [[ -n "$secret_value" ]]; then
+                    echo "Processing secret in file: $secret_name"
+                    file_content=$(echo "$file_content" | sed "s|\\\${{[[:space:]]*secrets\.$secret_name[[:space:]]*}}|$secret_value|g")
+                  else
+                    echo "Warning: Secret $secret_name not available for parameter file"
+                  fi
+                done
+                
+                # Write processed content to new file
+                echo "$file_content" > "$proc_file"
+                
+                # Update the parameter-file path in the JSON
+                json_str=$(echo "$json_str" | jq --arg path "$proc_file" '.["parameter-file"]=$path')
+              else
+                # No secrets in file, just use original
+                echo "No secrets found in parameter file"
+                cp "$pf" "$proc_file"
+                json_str=$(echo "$json_str" | jq --arg path "$proc_file" '.["parameter-file"]=$path')
+              fi
+            fi
+          fi
+          
+          echo "$json_str"
+        }
         
         # Split input resource paths by comma
         IFS=',' read -ra RESOURCE_PATHS <<< "${{ inputs.resource_paths }}"
@@ -114,11 +229,7 @@ runs:
             AWS_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_role_secrets[$env] // "AWS_ROLE_TO_ASSUME"')
             CFN_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].cfn_role_secrets[$env] // "CFN_ROLE_ARN"')
             IAM_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].iam_execution_role_secrets[$env] // "IAM_EXECUTION_ROLE_ARN"')
-            DEPENDS_ON=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].dependsOn // ""')
-
-            # Check if custom deployment is enabled for this environment
-            CUSTOM_DEPLOYMENT=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].custom_deployment // "false"')
-            echo "Custom deployment for $ENV: $CUSTOM_DEPLOYMENT"
+            VARS_CONFIG=$(echo "$CONFIG_CONTENT" | jq -c --arg env "$ENV" '.deployments[0].github_vars[$env] // {}')
             
             # Skip if any required field is empty
             if [[ -z "$PARAMS" || "$PARAMS" == "null" || -z "$RUNNER" || "$RUNNER" == "null" || 
@@ -127,9 +238,12 @@ runs:
               continue
             fi
             
+            # Process secrets in parameters if enabled
+            PROCESSED_PARAMS=$(process_secrets_in_json "$PARAMS")
+            
             # Create matrix item (all on one line)
-            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"parameters\":$PARAMS}"
-
+            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"github_vars\":$VARS_CONFIG,\"parameters\":$PROCESSED_PARAMS}"
+            
             # Add to appropriate matrix based on environment
             if [[ "$ENV" == "dev" ]]; then
               DEV_MATRIX_ITEMS+=("$MATRIX_ITEM")
@@ -137,11 +251,6 @@ runs:
               INT_MATRIX_ITEMS+=("$MATRIX_ITEM")
             elif [[ "$ENV" == "prod" ]]; then
               PROD_MATRIX_ITEMS+=("$MATRIX_ITEM")
-            fi
-            
-            # Add to custom deployment matrix if enabled
-            if [[ "$CUSTOM_DEPLOYMENT" == "true" ]]; then
-              CUSTOM_MATRIX_ITEMS+=("$MATRIX_ITEM")
             fi
           done
         done
@@ -165,17 +274,10 @@ runs:
           PROD_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${PROD_MATRIX_ITEMS[*]}")]}";
         fi
         
-        if [ ${#CUSTOM_MATRIX_ITEMS[@]} -eq 0 ]; then
-          CUSTOM_MATRIX_JSON="{\"include\":[]}"
-        else
-          CUSTOM_MATRIX_JSON="{\"include\":[$(IFS=,; echo "${CUSTOM_MATRIX_ITEMS[*]}")]}";
-        fi
-        
         # Verify JSON is valid
         echo "$DEV_MATRIX_JSON" | jq . > /dev/null 2>&1
         echo "$INT_MATRIX_JSON" | jq . > /dev/null 2>&1
         echo "$PROD_MATRIX_JSON" | jq . > /dev/null 2>&1
-        echo "$CUSTOM_MATRIX_JSON" | jq . > /dev/null 2>&1
         
         # Write matrices to outputs
         echo "dev_matrix<<EOF" >> $GITHUB_OUTPUT
@@ -188,8 +290,4 @@ runs:
         
         echo "prod_matrix<<EOF" >> $GITHUB_OUTPUT
         echo "$PROD_MATRIX_JSON" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-        
-        echo "custom_matrix<<EOF" >> $GITHUB_OUTPUT
-        echo "$CUSTOM_MATRIX_JSON" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT

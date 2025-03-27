@@ -77,6 +77,7 @@ jobs:
         env:
           GITHUB_ENVIRONMENTS: ${{ needs.detect-changes.outputs.specific_environment || 'dev,int,prod' }}
           CONFIG_PATH: ${{ needs.detect-changes.outputs.resource_paths }}
+        shell: bash  
         run: |
           # Підготовка шляху до конфігураційного файлу
           FULL_CONFIG_PATH="${CONFIG_PATH}/deployment-config.yml"

@@ -86,14 +86,52 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
      
-      - name: Set up secrets for parameter processing
-        id: setup-secrets
+      - name: Process Parameters
+        id: process-params
         shell: bash
         run: |
-          echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
-          echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
-          cat /tmp/github_secrets.json
-          echo "Set up secrets for parameter processing using file method"     
+          TEMP_DIR="${{ runner.temp }}/cfn-params"
+          mkdir -p "$TEMP_DIR"
+
+          PARAM_FILE="${{ matrix.parameters.parameter-file }}"
+          PROCESSED_PARAM_FILE=""
+
+          if [[ -n "$PARAM_FILE" && "$PARAM_FILE" != "null" ]]; then
+            if [[ -f "$PARAM_FILE" ]]; then
+              CONTENT=$(cat "$PARAM_FILE")
+              if echo "$CONTENT" | grep -q "secrets\."; then
+                PROCESSED_PARAM_FILE="$TEMP_DIR/processed-params.json"
+                cp "$PARAM_FILE" "$PROCESSED_PARAM_FILE"
+                ALL_SECRETS=$(env | grep "^SECRETS_" | cut -d= -f1)
+                for SECRET_VAR in $ALL_SECRETS; do
+                  SECRET_NAME=${SECRET_VAR#SECRETS_}
+                  SECRET_VALUE=${!SECRET_VAR}
+                  PATTERN="\\\${{ secrets\\.$SECRET_NAME }}"
+                  sed -i "s|$PATTERN|$SECRET_VALUE|g" "$PROCESSED_PARAM_FILE"
+                done
+              else
+                PROCESSED_PARAM_FILE="$PARAM_FILE"
+              fi
+            fi
+          fi
+
+          # Inline parameters (optional if you need them)
+          INLINE_PARAMS='${{ toJSON(matrix.parameters.inline-parameters) }}'
+          PROCESSED_INLINE_PARAMS="$INLINE_PARAMS"
+          if [[ "$INLINE_PARAMS" != "null" && -n "$INLINE_PARAMS" ]]; then
+            if echo "$INLINE_PARAMS" | grep -q "secrets\."; then
+              ALL_SECRETS=$(env | grep "^SECRETS_" | cut -d= -f1)
+              for SECRET_VAR in $ALL_SECRETS; do
+                SECRET_NAME=${SECRET_VAR#SECRETS_}
+                SECRET_VALUE=${!SECRET_VAR}
+                PATTERN="\\\${{ secrets\\.$SECRET_NAME }}"
+                PROCESSED_INLINE_PARAMS=$(echo "$PROCESSED_INLINE_PARAMS" | sed "s|$PATTERN|$SECRET_VALUE|g")
+              done
+            fi
+          fi
+
+          echo "param_file=$PROCESSED_PARAM_FILE" >> $GITHUB_OUTPUT
+          echo "inline_params=$PROCESSED_INLINE_PARAMS" >> $GITHUB_OUTPUT 
      
       - name: Deploy Stack
         uses: ./.github/actions/composite
@@ -108,8 +146,8 @@ jobs:
           filename-patterns: ${{ matrix.parameters.filename-patterns }}
           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
           extraArgs: ${{ matrix.parameters.extraArgs }}          
-          parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          parameter-file: ${{ steps.process-params.outputs.param_file }}
+          inline-parameters: ${{ steps.process-params.outputs.inline_params }}
           tags: ${{ matrix.parameters.tags }}
           aws-region: ${{ matrix.aws_region }}
           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}

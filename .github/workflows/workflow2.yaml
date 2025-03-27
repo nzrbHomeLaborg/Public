@@ -86,7 +86,7 @@ jobs:
             exit 1
           fi
           
-          matrix=$(python matrix_generator.py "$FULL_CONFIG_PATH")
+          matrix=$(python ./github/workflows/matrix_generator.py "$FULL_CONFIG_PATH")
           echo "$matrix" >> $GITHUB_OUTPUT
 
   deploy-dev:

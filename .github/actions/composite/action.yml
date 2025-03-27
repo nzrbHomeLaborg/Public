@@ -78,7 +78,7 @@ runs:
       with:
           stack-name: ${{ inputs.stack-name }}
           template: https://s3.amazonaws.com/${{ inputs.bucket-name }}/${{ inputs.target-folder }}/${{ inputs.template-name }}
-          inline-parameters: |
+          inline-parameters: |-
               [
               {
                   "ParameterKey": "email",

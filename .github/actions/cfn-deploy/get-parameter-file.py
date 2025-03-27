@@ -138,72 +138,28 @@ def main():
         logger.info(f"{BLUE}No CFN parameters are available.{RESET}")
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write("PARAM_FILE=\n")
-
 def load_github_secrets():
     """
-    Load GitHub secrets from environment variables
+    Load GitHub secrets from environment variables with SECRET_ prefix
     
     Returns:
         dict: Dictionary with secret names as keys and their values
     """
     secrets = {}
     
-    # Спочатку спробуємо завантажити секрети з base64-кодованої змінної
-    secrets_base64 = os.environ.get('GITHUB_SECRETS_BASE64', '')
-    if secrets_base64:
-        try:
-            # Декодуємо base64 в рядок, потім парсимо як JSON
-            secrets_json = base64.b64decode(secrets_base64).decode('utf-8')
-            secrets = json.loads(secrets_json)
-            logger.info(f"{BLUE}Loaded secrets from base64 encoded environment variable{RESET}")
-            return secrets
-        except Exception as e:
-            logger.error(f"Error decoding base64 secrets: {e}")
-    
-    # Другий спосіб - перевірити файл з секретами
-    secrets_path = os.environ.get('GITHUB_SECRETS_PATH', '')
-    if secrets_path and os.path.exists(secrets_path):
-        try:
-            with open(secrets_path, 'r') as f:
-                secrets = json.load(f)
-            logger.info(f"{BLUE}Loaded secrets from file: {secrets_path}{RESET}")
-            # Видаляємо файл після зчитування для безпеки
-            try:
-                os.remove(secrets_path)
-                logger.info(f"{BLUE}Removed secrets file after reading{RESET}")
-            except:
-                pass
-            return secrets
-        except Exception as e:
-            logger.error(f"Error reading secrets from file: {e}")
-    
-    # Третій спосіб - перевірити змінну середовища з JSON секретами
-    try:
-        secrets_json = os.environ.get('GITHUB_SECRETS_JSON', '{}')
-        if secrets_json and secrets_json != '{}':
-            # Можливо потрібно очистити від додаткових лапок
-            if secrets_json.startswith("'") and secrets_json.endswith("'"):
-                secrets_json = secrets_json[1:-1]
-            secrets = json.loads(secrets_json)
-            logger.info(f"{BLUE}Loaded secrets from GITHUB_SECRETS_JSON variable{RESET}")
-            return secrets
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing GITHUB_SECRETS_JSON: {e}")
-    
-    # Четвертий спосіб - шукати префікс SECRET_ у змінних середовища
+    # Шукаємо всі змінні середовища з префіксом SECRET_
     for key, value in os.environ.items():
         if key.startswith('SECRET_'):
-            # Зберігаємо без префіксу SECRET_
             secret_name = key[7:]  # Довжина 'SECRET_' = 7
             secrets[secret_name] = value
     
     if secrets:
-        logger.info(f"{BLUE}Loaded {len(secrets)} secrets from SECRET_ environment variables{RESET}")
+        logger.info(f"{BLUE}Loaded {len(secrets)} secrets from environment variables{RESET}")
     else:
-        logger.warning(f"{YELLOW}No secrets found. Parameters with SECRET: prefix will not be replaced.{RESET}")
+        logger.warning(f"{YELLOW}No SECRET_ prefixed environment variables found{RESET}")
     
     return secrets
-
+    
 def read_from_s3(s3_path):
     """
     Read parameters from an S3 bucket.

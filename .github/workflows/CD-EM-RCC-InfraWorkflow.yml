@@ -86,13 +86,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up secrets for parameter processing
+      - name: Set up specific secrets
+        shell: bash
         run: |
-          # Для base64 кодування
-          SECRETS_JSON='${{ toJSON(secrets) }}'
-          SECRETS_BASE64=$(echo "$SECRETS_JSON" | base64 -w 0)
-          echo "GITHUB_SECRETS_BASE64=$SECRETS_BASE64" >> $GITHUB_ENV
-          echo "Set up secrets for parameter processing"
+          # Встановлюємо тільки ті секрети, які потрібні для параметрів
+          for SECRET_KEY in $(echo '${{ toJSON(matrix.github_secrets) }}' | jq -r 'keys[]'); do
+            SECRET_NAME=$(echo '${{ toJSON(matrix.github_secrets) }}' | jq -r --arg key "$SECRET_KEY" '.[$key]')
+            echo "SECRET_$SECRET_KEY=${{ secrets[matrix.github_secrets[SECRET_KEY]] }}" >> $GITHUB_ENV
+          done
       
       - name: Deploy Stack
         uses: ./.github/actions/composite

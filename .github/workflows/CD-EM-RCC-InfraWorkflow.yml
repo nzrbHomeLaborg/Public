@@ -106,7 +106,7 @@ jobs:
                 for SECRET_VAR in $ALL_SECRETS; do
                   SECRET_NAME=${SECRET_VAR#SECRETS_}
                   SECRET_VALUE=${!SECRET_VAR}
-                  PATTERN="\\\${{ secrets\\.$SECRET_NAME }}"
+                  PATTERN="\\${{ secrets.$SECRET_NAME }}"
                   sed -i "s|$PATTERN|$SECRET_VALUE|g" "$PROCESSED_PARAM_FILE"
                 done
               else
@@ -124,14 +124,14 @@ jobs:
               for SECRET_VAR in $ALL_SECRETS; do
                 SECRET_NAME=${SECRET_VAR#SECRETS_}
                 SECRET_VALUE=${!SECRET_VAR}
-                PATTERN="\\\${{ secrets\\.$SECRET_NAME }}"
+                PATTERN="\\${{ secrets.$SECRET_NAME }}"
                 PROCESSED_INLINE_PARAMS=$(echo "$PROCESSED_INLINE_PARAMS" | sed "s|$PATTERN|$SECRET_VALUE|g")
               done
             fi
           fi
 
           echo "param_file=$PROCESSED_PARAM_FILE" >> $GITHUB_OUTPUT
-          echo "inline_params=$PROCESSED_INLINE_PARAMS" >> $GITHUB_OUTPUT 
+          echo "inline_params=$PROCESSED_INLINE_PARAMS" >> $GITHUB_OUTPUT
      
       - name: Deploy Stack
         uses: ./.github/actions/composite

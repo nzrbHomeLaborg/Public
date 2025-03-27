@@ -75,22 +75,42 @@ jobs:
       - name: Generate Matrix
         id: generate-matrix
         env:
-          GITHUB_ENVIRONMENTS: ${{ needs.detect-changes.outputs.specific_environment || 'dev,int,prod' }}
-          CONFIG_PATH: ${{ needs.detect-changes.outputs.resource_paths }}
-        shell: bash  
+            GITHUB_ENVIRONMENTS: ${{ needs.detect-changes.outputs.specific_environment || 'dev,int,prod' }}
+            CONFIG_PATH: ${{ needs.detect-changes.outputs.resource_paths }}
         run: |
-          set -e
-          # Підготовка шляху до конфігураційного файлу
-          FULL_CONFIG_PATH="${CONFIG_PATH}/deployment-config.yml"
-          
-          if [ ! -f "$FULL_CONFIG_PATH" ]; then
-            echo "Configuration file not found at $FULL_CONFIG_PATH"
+            # Перевірка вмісту змінних середовища
+            echo "CONFIG_PATH: $CONFIG_PATH"
+            echo "Listing directory contents:"
+            ls -la "$CONFIG_PATH"
+            
+            # Перевірка варіантів імені файлу
+            YAML_FILES=(
+            "$CONFIG_PATH/deployment-config.yaml"
+            "$CONFIG_PATH/deployment-config.yml"
+            "$CONFIG_PATH/config.yaml"
+            "$CONFIG_PATH/config.yml"
+            )
+            
+            CONFIG_FILE=""
+            for file in "${YAML_FILES[@]}"; do
+            if [ -f "$file" ]; then
+                CONFIG_FILE="$file"
+                break
+            fi
+            done
+            
+            if [ -z "$CONFIG_FILE" ]; then
+            echo "No configuration file found. Tried:"
+            printf '%s\n' "${YAML_FILES[@]}"
             exit 1
-          fi
-          pip install pyyaml
-          matrix=$(python cloud-formation/rcc/matrix_generator.py "$FULL_CONFIG_PATH")
-          echo "$matrix" >> $GITHUB_OUTPUT
-          echo "$matrix"
+            fi
+            
+            echo "Using config file: $CONFIG_FILE"
+            
+            pip install pyyaml
+            matrix=$(python cloud-formation/rcc/matrix_generator.py "$CONFIG_FILE")
+            echo "$matrix" >> $GITHUB_OUTPUT
+            echo "$matrix"
 
   deploy-dev:
     needs: prepare-matrices

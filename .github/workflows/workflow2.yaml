@@ -85,8 +85,8 @@ jobs:
             echo "Configuration file not found at $FULL_CONFIG_PATH"
             exit 1
           fi
-          
-          matrix=$(python ./github/workflows/matrix_generator.py "$FULL_CONFIG_PATH")
+          ls
+          matrix=$(python ./.github/workflows/matrix_generator.py "$FULL_CONFIG_PATH")
           echo "$matrix" >> $GITHUB_OUTPUT
 
   deploy-dev:

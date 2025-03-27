@@ -44,8 +44,8 @@ deployments:
             {
               "ParameterKey": "email",
               "ParameterValue": "secrets.NZRB"
-            },            
-        ]           
+            }          
+          ]           
 
 
       int:

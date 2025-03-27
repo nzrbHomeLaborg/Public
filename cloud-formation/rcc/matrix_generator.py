@@ -1,107 +1,65 @@
+#!/usr/bin/env python3
 import os
+import sys
 import yaml
 import json
-import argparse
 
-def get_github_secrets():
-    """
-    Отримання секретів для всіх можливих середовищ.
-    """
-    # Отримуємо всі можливі середовища з вхідних даних
-    environments = os.environ.get('GITHUB_ENVIRONMENTS', '').split(',')
+def generate_matrix(config_path):
+    # Отримання середовищ з оточення
+    environments = os.environ.get('GITHUB_ENVIRONMENTS', 'dev,int,prod').split(',')
     
-    # Словник для зберігання секретів за середовищами
-    all_secrets = {}
-
-    for env in environments:
-        env = env.strip().lower()
-        if not env:
-            continue
-
-        # Збираємо секрети для кожного середовища
-        env_secrets = {}
-        for key, value in os.environ.items():
-            # Шукаємо секрети специфічні для конкретного середовища
-            if key.startswith(f'{env.upper()}_SECRET_'):
-                secret_name = key[len(f'{env.upper()}_SECRET_'):]
-                env_secrets[secret_name] = value
-        
-        all_secrets[env] = env_secrets
-
-    return all_secrets
-
-def load_deployment_config(config_path):
-    """Завантаження конфігураційного файлу."""
+    # Завантаження конфігурації
     with open(config_path, 'r') as file:
-        return yaml.safe_load(file)
-
-def replace_secrets(params, secrets):
-    """Заміна плейсхолдерів секретів на реальні значення."""
-    def replace_secret_in_value(value):
-        if isinstance(value, str) and value.startswith('${{ secrets.'):
-            secret_name = value.split('secrets.')[1].rstrip(' }}')
-            return secrets.get(secret_name, value)
-        return value
-
-    if isinstance(params, dict):
-        return {k: replace_secret_in_value(v) for k, v in params.items()}
-    elif isinstance(params, list):
-        return [replace_secret_in_value(item) for item in params]
+        config = yaml.safe_load(file)
     
-    return params
-
-def generate_matrix(config, all_secrets):
-    """Генерація матриці для розгортання."""
-    matrix_items = []
-
+    # Ініціалізація матриць
+    matrices = {
+        'dev_matrix': {'include': []},
+        'int_matrix': {'include': []},
+        'prod_matrix': {'include': []},
+        'custom_matrix': {'include': []}
+    }
+    
+    # Обробка конфігурації
     for deployment in config.get('deployments', []):
         for env in deployment.get('environments', []):
-            # Секрети для поточного середовища
-            env_secrets = all_secrets.get(env, {})
+            if env not in environments:
+                continue
             
-            # Збираємо параметри для поточного середовища
-            env_params = deployment.get('parameters', {}).get(env, {})
-            
-            # Заміна секретів
-            env_params = replace_secrets(env_params, env_secrets)
-
+            # Збирання параметрів для середовища
             matrix_item = {
                 'environment': env,
-                'runner': deployment.get('runners', {}).get(env),
+                'runner': deployment.get('runners', {}).get(env, 'ubuntu-latest'),
                 'github_environment': deployment.get('github_environments', {}).get(env),
                 'aws_region': deployment.get('aws_regions', {}).get(env),
-                'parameters': env_params
+                'parameters': deployment.get('parameters', {}).get(env, {})
             }
-
-            matrix_items.append(matrix_item)
-
-    return matrix_items
+            
+            # Додавання до відповідної матриці
+            if env == 'dev':
+                matrices['dev_matrix']['include'].append(matrix_item)
+            elif env == 'int':
+                matrices['int_matrix']['include'].append(matrix_item)
+            elif env == 'prod':
+                matrices['prod_matrix']['include'].append(matrix_item)
+            else:
+                matrices['custom_matrix']['include'].append(matrix_item)
+    
+    return json.dumps(matrices)
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate deployment matrix')
-    parser.add_argument('config_path', help='Path to deployment configuration file')
-    args = parser.parse_args()
-
-    # Перевірка, чи існує файл
-    if not os.path.exists(args.config_path):
-        print(f"Error: Configuration file not found at {args.config_path}")
+    if len(sys.argv) < 2:
+        print("Usage: python matrix_generator.py <config_path>")
+        sys.exit(1)
+    
+    config_path = sys.argv[1]
+    
+    try:
+        matrix = generate_matrix(config_path)
+        print(matrix)
+    except Exception as e:
+        print(f"Error generating matrix: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Завантаження конфігурації
-    config = load_deployment_config(args.config_path)
-
-    # Отримання секретів для всіх середовищ
-    all_secrets = get_github_secrets()
-
-    # Генерація матриці
-    matrix = generate_matrix(config, all_secrets)
-
-    # Виведення JSON для GitHub Actions
-    result = {
-        'dev_matrix': {'include': [item for item in matrix if item['environment'] == 'dev']},
-        'int_matrix': {'include': [item for item in matrix if item['environment'] == 'int']},
-        'prod_matrix': {'include': [item for item in matrix if item['environment'] == 'prod']},
-        'custom_matrix': {'include': [item for item in matrix if item['environment'] not in ['dev', 'int', 'prod']]}
-    }
-
-    print(json.dumps(result))
+if __name__ == '__main__':
+    main()

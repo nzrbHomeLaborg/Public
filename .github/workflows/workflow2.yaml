@@ -94,14 +94,20 @@ jobs:
                 continue
             fi
             
-            # Генерація матриці для поточного шляху
-            echo "Processing configuration: $CONFIG_FILE"
+            # Перевірка вмісту файлу
+            echo "Configuration file contents:"
+            cat "$CONFIG_FILE"
             
             # Встановлення залежностей
-            pip install pyyaml
+            pip install pyyaml jq
             
-            # Виклик генератора матриці
-            MATRIX=$(python cloud-formation/rcc/matrix_generator.py "$CONFIG_FILE")
+            # Виклик генератора матриці з додатковою діагностикою
+            echo "Running matrix generator with environments: $GITHUB_ENVIRONMENTS"
+            MATRIX=$(GITHUB_ENVIRONMENTS="$GITHUB_ENVIRONMENTS" python cloud-formation/rcc/matrix_generator.py "$CONFIG_FILE")
+            
+            # Виведення результату
+            echo "Generated matrix:"
+            echo "$MATRIX"
             
             # Додавання до масиву матриць
             MATRICES+=("$MATRIX")

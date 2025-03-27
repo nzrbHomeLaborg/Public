@@ -78,7 +78,7 @@ runs:
       with:
           stack-name: ${{ inputs.stack-name }}
           template: https://s3.amazonaws.com/${{ inputs.bucket-name }}/${{ inputs.target-folder }}/${{ inputs.template-name }}
-          inline-parameters: ${{ inputs.inline-parameters }}
+          inline-parameters: ${{ toJSON(inputs.inline-parameters) }}
           parameter-file: ${{ inputs.parameter-file }} 
           cfn-role-arn: ${{ inputs.cfn-role-arn }}
           iam-execution-role-arn: ${{ inputs.aws-role-to-assume }}

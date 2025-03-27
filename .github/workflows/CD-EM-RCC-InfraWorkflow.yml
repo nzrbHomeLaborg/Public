@@ -95,19 +95,31 @@ jobs:
           
           PARAM_FILE="${{ matrix.parameters.parameter-file }}"
           PROCESSED_PARAM_FILE=""
+          INLINE_PARAMS='${{ toJSON(matrix.parameters.inline-parameters) }}'
           
+          # Process both parameter file and inline parameters
           if [[ -n "$PARAM_FILE" && "$PARAM_FILE" != "null" && -f "$PARAM_FILE" ]]; then
             PROCESSED_PARAM_FILE="$TEMP_DIR/processed-params.json"
-            
-            # Use the separate script for parameter processing
-            chmod +x .github/scripts/process-parameters.sh
-            .github/scripts/process-parameters.sh "$PARAM_FILE" "$PROCESSED_PARAM_FILE"
           else
             PROCESSED_PARAM_FILE="$PARAM_FILE"
           fi
           
+          # Use the separate script for parameter processing
+          chmod +x .github/scripts/process-parameters.sh
+          
+          # Call script with inline parameters
+          SCRIPT_OUTPUT=$(.github/scripts/process-parameters.sh "$PARAM_FILE" "$PROCESSED_PARAM_FILE" "$INLINE_PARAMS")
+          
+          # Extract the inline parameters output from the script response
+          PROCESSED_INLINE_PARAMS=$(echo "$SCRIPT_OUTPUT" | grep "^inline_params_output=" | sed 's/^inline_params_output=//')
+          
+          # Set outputs
           echo "param_file=$PROCESSED_PARAM_FILE" >> $GITHUB_OUTPUT
-          echo "inline_params=${{ toJSON(matrix.parameters.inline-parameters) }}" >> $GITHUB_OUTPUT
+          
+          if [[ -n "$PROCESSED_INLINE_PARAMS" ]]; then
+            echo "inline_params=$PROCESSED_INLINE_PARAMS" >> $GITHUB_OUTPUT
+          else
+            echo "inline_params=$INLINE_PARAMS" >> $GITHUB_OUTPUT
      
       - name: Deploy Stack
         uses: ./.github/actions/composite

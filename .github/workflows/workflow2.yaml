@@ -91,11 +91,13 @@ jobs:
 
   deploy-dev:
     needs: prepare-matrices
-    if: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null }}
+    if: >-
+        needs.prepare-matrices.outputs.dev_matrix != '' && 
+        fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null
     runs-on: ${{ matrix.runner }}
     strategy:
-      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix) }}
-      fail-fast: false
+        matrix: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix) }}
+        fail-fast: false
     environment: ${{ matrix.github_environment }}
     
     name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to DEV

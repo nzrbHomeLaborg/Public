@@ -1,0 +1,180 @@
+name: Workflow-2
+
+permissions:
+  id-token: write
+  contents: write
+
+on:
+  push:
+    branches: [main]   
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      resource_path:
+        description: 'Resource path (e.g., cloud-formation/rcc/a-crs-spa)'
+        required: true
+        type: string
+      environment:
+        description: 'Specific environment (leave empty for all)'
+        required: false
+        type: string
+
+jobs:
+  detect-changes:
+    runs-on: custom
+    outputs:
+      resource_paths: ${{ steps.detect-changes-action.outputs.paths }}
+      specific_environment: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changed Applications
+        id: detect-changes-action
+        uses: ./.github/actions/detect-changes-action
+        with:
+          github_token: ${{ github.token }}
+          event_name: ${{ github.event_name }}
+          github_sha: ${{ github.sha }}
+          github_ref: ${{ github.ref }}
+          event_before: ${{ github.event.before || '' }}
+          pull_request_number: ${{ github.event.pull_request.number || '' }}
+          resource_path_input: ${{ github.event.inputs.resource_path || '' }}
+          repository: ${{ github.repository }}
+      
+      - name: Show detected paths
+        shell: bash
+        run: |
+          echo "Detected paths: ${{ steps.detect-changes-action.outputs.resource_paths }}"
+
+  prepare-matrices:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.resource_paths != '' }}
+    runs-on: custom
+    outputs:
+      dev_matrix: ${{ steps.generate-matrix.outputs.dev_matrix }}
+      int_matrix: ${{ steps.generate-matrix.outputs.int_matrix }}
+      prod_matrix: ${{ steps.generate-matrix.outputs.prod_matrix }}
+      custom_matrix: ${{ steps.generate-matrix.outputs.custom_matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      
+    #   - name: Set up Python
+    #     uses: actions/setup-python@v4
+    #     with:
+    #       python-version: '3.x'
+      
+    #   - name: Install dependencies
+    #     run: |
+    #       python -m pip install --upgrade pip
+    #       pip install pyyaml
+      
+      - name: Generate Matrix
+        id: generate-matrix
+        env:
+          GITHUB_ENVIRONMENTS: ${{ needs.detect-changes.outputs.specific_environment || 'dev,int,prod' }}
+          CONFIG_PATH: ${{ needs.detect-changes.outputs.resource_paths }}
+        run: |
+          # Підготовка шляху до конфігураційного файлу
+          FULL_CONFIG_PATH="${CONFIG_PATH}/deployment-config.yaml"
+          
+          if [ ! -f "$FULL_CONFIG_PATH" ]; then
+            echo "Configuration file not found at $FULL_CONFIG_PATH"
+            exit 1
+          fi
+          
+          matrix=$(python matrix_generator.py "$FULL_CONFIG_PATH")
+          echo "$matrix" >> $GITHUB_OUTPUT
+
+  deploy-dev:
+    needs: prepare-matrices
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
+    
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to DEV
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+     
+    #   - name: Set up secrets for parameter processing
+    #     id: setup-secrets
+    #     shell: bash
+    #     run: |
+    #       echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
+    #       echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
+    #       cat /tmp/github_secrets.json
+    #       echo "Set up secrets for parameter processing using file method"     
+     
+      - name: Deploy Stack
+        uses: ./.github/actions/composite
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+          cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
+          iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
+
+#   deploy-int:
+#     needs: [prepare-matrices, deploy-dev]
+#     if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
+#     runs-on: ${{ matrix.runner }}
+#     strategy:
+#       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
+#       fail-fast: false
+#     environment: ${{ matrix.github_environment }}
+    
+#     name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
+    
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Set up secrets for parameter processing
+#         id: setup-secrets
+#         shell: bash
+#         run: |
+#           echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
+#           echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
+#           cat /tmp/github_secrets.json
+#           echo "Set up secrets for parameter processing using file method"          
+      
+#       - name: Deploy Stack
+#         uses: ./.github/actions/composite
+#         with:
+#           environment: ${{ matrix.environment }}
+#           stack-name: ${{ matrix.parameters.stack-name }}
+#           bucket-name: ${{ matrix.parameters.bucket-name }}
+#           upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+#           target-folder: ${{ matrix.parameters.target-folder }}
+#           source-folder: ${{ matrix.parameters.source-folder }}
+#           template-name: ${{ matrix.parameters.template-name }}
+#           filename-patterns: ${{ matrix.parameters.filename-patterns }}
+#           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+#           extraArgs: ${{ matrix.parameters.extraArgs }}          
+#           parameter-file: ${{ matrix.parameters.parameter-file }}
+#           inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+#           tags: ${{ matrix.parameters.tags }}
+#           aws-region: ${{ matrix.aws_region }}
+#           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+#           cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
+#           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}

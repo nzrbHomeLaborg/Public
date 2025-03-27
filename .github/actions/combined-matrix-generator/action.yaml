@@ -2,12 +2,17 @@ name: 'Generate Combined Deployment Matrices'
 description: 'Parses multiple deployment config files and generates combined matrices'
 inputs:
   resource_paths:
-    description: 'Comma-separated paths to resources (e.g., cloud-formation/rcc/a-crs-spa,cloud-formation/rcc/another-resource)'
+    description: 'Comma-separated paths to resources'
     required: true
   specific_environment:
-    description: 'Specific environment to deploy (empty for all configured)'
+    description: 'Specific environment to deploy'
     required: false
     default: ''
+  # Додаємо вхідні параметри для передачі секретів
+  secrets_json:
+    description: 'JSON string of secrets'
+    required: false
+    default: '{}'
 
 outputs:
   dev_matrix:
@@ -22,7 +27,7 @@ outputs:
   custom_matrix:
     description: 'Matrix for custom deployments (stg, int-dr, etc)'
     value: ${{ steps.generate-matrices.outputs.custom_matrix }}
-  
+
 runs:
   using: "composite"
   steps:
@@ -42,11 +47,11 @@ runs:
         sudo apt-get update
         sudo apt-get install -y jq
 
-    - name: Replace Secrets
-      id: replace-secrets
+    - name: Generate deployment matrices
+      id: generate-matrices
       shell: bash
       env:
-        SECRETS_JSON: ${{ toJson(secrets) }}
+        SECRETS_JSON: ${{ inputs.secrets_json }}
       run: |
         # Функція для заміни секретів у JSON
         replace_secrets() {
@@ -64,9 +69,6 @@ runs:
             )
           '
         }
-
-        # Експортуємо функцію для використання в наступних кроках
-        declare -f replace_secrets > /tmp/replace_secrets_func.sh
 
     - name: Generate deployment matrices
       id: generate-matrices

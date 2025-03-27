@@ -70,6 +70,7 @@ jobs:
         with:
           resource_paths: ${{ needs.detect-changes.outputs.resource_paths }}
           specific_environment: ${{ needs.detect-changes.outputs.specific_environment }}
+          secrets_json: ${{ toJson(secrets) }}
 
   deploy-dev:
     needs: prepare-matrices
@@ -86,14 +87,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
      
-      - name: Set up secrets for parameter processing
-        id: setup-secrets
-        shell: bash
-        run: |
-          echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
-          echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
-          cat /tmp/github_secrets.json
-          echo "Set up secrets for parameter processing using file method"     
+      # - name: Set up secrets for parameter processing
+      #   id: setup-secrets
+      #   shell: bash
+      #   run: |
+      #     echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
+      #     echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
+      #     cat /tmp/github_secrets.json
+      #     echo "Set up secrets for parameter processing using file method"     
      
       - name: Deploy Stack
         uses: ./.github/actions/composite

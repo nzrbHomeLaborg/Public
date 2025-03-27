@@ -26,7 +26,9 @@ deployments:
         tags: A_CRS_TAGS
       int: 
         tags: A_CRS_TAGS
-    secrets_envir:
+    environment_secrets:
+      dev:
+        NZRB: '${{ secrets.NZRB }}'
           
     parameters:
       dev:

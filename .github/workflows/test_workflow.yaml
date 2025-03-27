@@ -15,6 +15,7 @@ on:
 jobs:
     prepare-matrices:
         runs-on: custom
+        environment: CD-EM-CRS-DEV
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4

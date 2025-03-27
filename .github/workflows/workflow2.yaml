@@ -79,7 +79,7 @@ jobs:
           CONFIG_PATH: ${{ needs.detect-changes.outputs.resource_paths }}
         run: |
           # Підготовка шляху до конфігураційного файлу
-          FULL_CONFIG_PATH="${CONFIG_PATH}/deployment-config.yaml"
+          FULL_CONFIG_PATH="${CONFIG_PATH}/deployment-config.yml"
           
           if [ ! -f "$FULL_CONFIG_PATH" ]; then
             echo "Configuration file not found at $FULL_CONFIG_PATH"

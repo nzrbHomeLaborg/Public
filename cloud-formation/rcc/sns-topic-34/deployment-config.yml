@@ -35,19 +35,26 @@ deployments:
         source-folder: cloud-formation/rcc/sns-topic-34
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
-        inline-parameters:
-          - ParameterKey: TopicName
-            ParameterValue: a-crs-CloudWatch-Alarms-dev-test
-        parameter-file: cloud-formation/rcc/sns-topic-34/dev.json  
-      int:
-        stack-name: 'a-crs-sns-dev-test-int'
-        bucket-name: 'nzrb-home-test'
-        bucket-upload: 'true'
-        target-folder: cloud-formation/rcc/sns-topic-34
-        source-folder: cloud-formation/rcc/sns-topic-34
-        # filename-patterns: "*.yaml"
-        template-name: 'template.yaml'
-        # inline-parameters:
-        #   - ParameterKey: TopicName
-        #     ParameterValue: a-crs-CloudWatch-Alarms-int
+        inline-parameters: |-
+          [
+            {
+              "ParameterKey": "email",
+              "ParameterValue": "${{ secrets.NZRB }}"
+            },
+            {
+              "ParameterKey": "username", 
+              "ParameterValue": "${{ secrets.APP_USERNAME }}"
+            }
+          ]
+      # int:
+      #   stack-name: 'a-crs-sns-dev-test-int'
+      #   bucket-name: 'nzrb-home-test'
+      #   bucket-upload: 'true'
+      #   target-folder: cloud-formation/rcc/sns-topic-34
+      #   source-folder: cloud-formation/rcc/sns-topic-34
+      #   # filename-patterns: "*.yaml"
+      #   template-name: 'template.yaml'
+      #   # inline-parameters:
+      #   #   - ParameterKey: TopicName
+      #   #     ParameterValue: a-crs-CloudWatch-Alarms-int
           

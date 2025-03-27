@@ -35,7 +35,7 @@ deployments:
         source-folder: cloud-formation/rcc/sns-topic-34
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
-        parameters-file: cloud-formation/rcc/sns-topic-34/dev.json  
+        parameter-file: cloud-formation/rcc/sns-topic-34/dev.json  
 
 
       int:

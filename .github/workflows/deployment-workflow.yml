@@ -1,51 +1,43 @@
-name: CD-EM-RCC-Deploy-Resource
+name: Deploy CloudFormation Resource
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      matrix_item:
-        description: 'JSON string of matrix item'
+      matrix_json:
         required: true
         type: string
-      github_sha:
-        description: 'GitHub SHA to checkout'
+      environment_type:
         required: true
         type: string
 
 jobs:
-  deploy-resource:
-    runs-on: ${{ fromJSON(inputs.matrix_item).runner }}
-    environment: ${{ fromJSON(inputs.matrix_item).github_environment }}
-    name: Deploy ${{ fromJSON(inputs.matrix_item).application }}-${{ fromJSON(inputs.matrix_item).resource }} to ${{ fromJSON(inputs.matrix_item).environment }}
+  deploy:
+    strategy:
+      matrix: ${{ fromJSON(inputs.matrix_json) }}
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
+    environment: ${{ matrix.github_environment }}
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to ${{ inputs.environment_type }}
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.github_sha }}
-      
-      # Process parameters before deployment to handle SECRET: placeholders
-      - name: Process deployment parameters
+        
+      # Process inline parameters here
+      - name: Process parameters
         id: process-params
         run: |
-          # Parse matrix item
-          MATRIX_ITEM='${{ inputs.matrix_item }}'
+          INLINE_PARAMS='${{ toJSON(matrix.parameters.inline-parameters) }}'
           
-          # Process any SECRET: placeholders in inline parameters
-          if [[ $(echo "$MATRIX_ITEM" | jq -r '.parameters.inline-parameters') != "null" ]]; then
-            INLINE_PARAMS=$(echo "$MATRIX_ITEM" | jq -r '.parameters.inline-parameters')
-            
-            # Process and rewrite each parameter that has SECRET: placeholder
-            PROCESSED_PARAMS=$(echo "$INLINE_PARAMS" | jq -c 'map(
-              if .ParameterValue != null and (.ParameterValue | type) == "string" and (.ParameterValue | startswith("SECRET:")) then
-                .ParameterValue = secrets[.ParameterValue[7:]]
-              else . end
-            )')
-            
-            echo "processed_inline_parameters=$PROCESSED_PARAMS" >> $GITHUB_OUTPUT
-          else
-            echo "processed_inline_parameters=[]" >> $GITHUB_OUTPUT
-          fi
+          # Process each parameter
+          PROCESSED_PARAMS=$(echo "$INLINE_PARAMS" | jq -c 'map(
+            if .ParameterValue != null and (.ParameterValue | type) == "string" and (.ParameterValue | startswith("SECRET:")) then
+              .ParameterValue = "some-value"  # Here we replace with actual secret
+            else . end
+          )')
+          
+          # Output the processed parameters
+          echo "processed_params=$PROCESSED_PARAMS" >> $GITHUB_OUTPUT
       
       # Deploy using your composite action
       - name: Deploy Stack

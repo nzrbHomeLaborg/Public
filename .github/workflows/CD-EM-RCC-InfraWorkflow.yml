@@ -86,14 +86,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
      
-      - name: Set up secrets for parameter processing
+      - name: Set up environment-specific secrets
         id: setup-secrets
         shell: bash
         run: |
-          echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
-          echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
-          cat /tmp/github_secrets.json
-          echo "Set up secrets for parameter processing using file method"     
+          # Для кожного секрету у матриці
+          if [[ -n "${{ toJSON(matrix.github_secrets) }}" && "${{ toJSON(matrix.github_secrets) }}" != "{}" ]]; then
+            echo "Setting up environment secrets..."
+            for SECRET_KEY in $(echo '${{ toJSON(matrix.github_secrets) }}' | jq -r 'keys[]'); do
+              SECRET_NAME=$(echo '${{ toJSON(matrix.github_secrets) }}' | jq -r --arg key "$SECRET_KEY" '.[$key]')
+              SECRET_VALUE="${{ secrets[format('{0}', SECRET_NAME)] }}"
+              echo "SECRET_$SECRET_KEY=$SECRET_VALUE" >> $GITHUB_ENV
+              echo "Set up secret: $SECRET_KEY"
+            done
+          else
+            echo "No environment secrets defined for this environment"
+          fi
      
       - name: Deploy Stack
         uses: ./.github/actions/composite

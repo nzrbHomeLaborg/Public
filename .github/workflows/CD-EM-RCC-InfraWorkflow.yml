@@ -86,15 +86,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up specific secrets
+      - name: Set dynamic secrets for inline parameters
         shell: bash
         run: |
-          # Встановлюємо тільки ті секрети, які потрібні для параметрів
-          for SECRET_KEY in $(echo '${{ toJSON(matrix.github_secrets) }}' | jq -r 'keys[]'); do
-            SECRET_NAME=$(echo '${{ toJSON(matrix.github_secrets) }}' | jq -r --arg key "$SECRET_KEY" '.[$key]')
-            echo "SECRET_$SECRET_KEY=${{ secrets[matrix.github_secrets[SECRET_KEY]] }}" >> $GITHUB_ENV
-          done
+          for param in $(echo '${{ toJSON(matrix.parameters.inline-parameters) }}' | jq -c '.[]'); do
+            SECRET_NAME=$(echo "$param" | jq -r '.ParameterValueSecretName // empty')
+            PARAM_KEY=$(echo "$param" | jq -r '.ParameterKey')
       
+            if [ -n "$SECRET_NAME" ]; then
+              echo "Setting secret for $PARAM_KEY from $SECRET_NAME"
+              SECRET_VALUE="${{ secrets[$SECRET_NAME] }}"
+              echo "${PARAM_KEY}=${SECRET_VALUE}" >> $GITHUB_ENV
+            fi
+          done
+        
       - name: Deploy Stack
         uses: ./.github/actions/composite
         with:

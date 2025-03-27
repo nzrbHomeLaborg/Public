@@ -1,0 +1,52 @@
+name: CD-EM-RCC-InfraWorkflow
+
+permissions:
+  id-token: write
+  contents: write
+
+on:
+  push:
+    branches: [main]   
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+
+jobs:
+    prepare-matrices:
+        runs-on: custom
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0 
+ 
+            - name: Deploy AWS Resources via cloudformation
+              uses: ./.github/actions/cfn-deploy
+              with:
+                stack-name: stack-name
+                template: https://s3.amazonaws.com/nzrb-home-test/cloud-formation/rcc/sns-topic-34/template.yaml
+                inline-parameters: |
+                    [
+                    {
+                        "ParameterKey": "email",
+                        "ParameterValue": "${{ secrets.NZRB }}"
+                    },
+                    {
+                        "ParameterKey": "TopicName",
+                        "ParameterValue": "a-crs-CloudWatch-Alarms-dev-test"
+                    }
+                    ]
+                cfn-role-arn: arn:aws:iam::381491849766:role/CloudFormationServiceRole
+                iam-execution-role-arn: arn:aws:iam::381491849766:role/GitHubActionsOIDCRole
+                aws-region: us-east-1
+                tags: |
+                    Name="stack-name"
+                    applicationid=99999
+                    applicationname=test-application
+                    department=Department Name
+                    businessowner=username@cat.com
+                    techowner=username@cat.com
+                    team=TeamName
+                    riskdomain=AL
+                    dataclassification=Green

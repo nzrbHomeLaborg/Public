@@ -80,14 +80,14 @@ runs:
           template: https://s3.amazonaws.com/${{ inputs.bucket-name }}/${{ inputs.target-folder }}/${{ inputs.template-name }}
           inline-parameters: |-
               [
-              {
-                  "ParameterKey": "email",
-                  "ParameterValue": "${{ secrets.NZRB }}"
-              },
-              {
-                  "ParameterKey": "TopicName",
-                  "ParameterValue": "a-crs-CloudWatch-Alarms-dev-test"
-              }
+                {
+                    "ParameterKey": "email",
+                    "ParameterValue": "${{ secrets.NZRB }}"
+                },
+                {
+                    "ParameterKey": "TopicName",
+                    "ParameterValue": "a-crs-CloudWatch-Alarms-dev-test"
+                }
               ]
           parameter-file: ${{ inputs.parameter-file }} 
           cfn-role-arn: ${{ inputs.cfn-role-arn }}

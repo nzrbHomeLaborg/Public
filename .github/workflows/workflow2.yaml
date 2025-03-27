@@ -67,7 +67,7 @@ jobs:
   deploy-matrix-items:
     needs: prepare-matrices
     if: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null }}
-    uses: ./.github/workflows/deploy-resource.yml
+    uses: ./.github/workflows/deployment-workflow.yml
     with:
         matrix_json: ${{ needs.prepare-matrices.outputs.dev_matrix }}
         environment_type: "dev"

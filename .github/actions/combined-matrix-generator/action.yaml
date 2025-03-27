@@ -23,25 +23,25 @@ outputs:
     description: 'Matrix for custom deployments (stg, int-dr, etc)'
     value: ${{ steps.generate-matrices.outputs.custom_matrix }}
 
-    runs:
-      using: "composite"
-      steps:
-        - name: Install yq and jq
-          shell: bash
-          run: |
-            if ! command -v yq &> /dev/null; then
-              echo "Installing yq..."
-              VERSION=v4.30.8
-              BINARY=yq_linux_amd64
-              wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - | \
-                tar xz
-              chmod +x ${BINARY}
-              sudo mv ${BINARY} /usr/bin/yq || mkdir -p $HOME/bin && mv ${BINARY} $HOME/bin/yq && echo "$HOME/bin" >> $GITHUB_PATH
-            fi
-            
-            # Встановлення jq
-            sudo apt-get update
-            sudo apt-get install -y jq
+runs:
+    using: "composite"
+    steps:
+      - name: Install yq and jq
+        shell: bash
+        run: |
+          if ! command -v yq &> /dev/null; then
+            echo "Installing yq..."
+            VERSION=v4.30.8
+            BINARY=yq_linux_amd64
+            wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - | \
+              tar xz
+            chmod +x ${BINARY}
+            sudo mv ${BINARY} /usr/bin/yq || mkdir -p $HOME/bin && mv ${BINARY} $HOME/bin/yq && echo "$HOME/bin" >> $GITHUB_PATH
+          fi
+          
+          # Встановлення jq
+          sudo apt-get update
+          sudo apt-get install -y jq
     
       - name: Replace Secrets
         id: replace-secrets

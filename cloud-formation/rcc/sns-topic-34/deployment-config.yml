@@ -37,11 +37,17 @@ deployments:
         source-folder: cloud-formation/rcc/sns-topic-34
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
-        inline-parameters:
-          - ParameterKey: TopicName
-            ParameterValue: a-crs-CloudWatch-Alarms-dev-test
-          - ParameterKey: email
-            ParameterValue: ${{ secrets.NZRB }}  
+        inline-parameters: |-
+            [
+            {
+                "ParameterKey": "email",
+                "ParameterValue": "${{ secrets.NZRB }}"
+            },
+            {
+                "ParameterKey": "TopicName",
+                "ParameterValue": "a-crs-CloudWatch-Alarms-dev-test"
+            }
+            ]
       # int:
       #   stack-name: 'a-crs-sns-dev-test-int'
       #   bucket-name: 'nzrb-home-test'

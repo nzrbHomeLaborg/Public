@@ -88,6 +88,7 @@ jobs:
           pip install pyyaml
           matrix=$(python cloud-formation/rcc/matrix_generator.py "$FULL_CONFIG_PATH")
           echo "$matrix" >> $GITHUB_OUTPUT
+          echo "$matrix"
 
   deploy-dev:
     needs: prepare-matrices

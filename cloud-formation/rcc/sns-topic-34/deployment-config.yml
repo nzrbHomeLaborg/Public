@@ -25,7 +25,9 @@ deployments:
       dev:
         tags: A_CRS_TAGS
       int: 
-        tags: A_CRS_TAGS  
+        tags: A_CRS_TAGS
+    secrets_envir:
+          
     parameters:
       dev:
         stack-name: 'a-crs-sns-dev-test'
@@ -38,7 +40,8 @@ deployments:
         inline-parameters:
           - ParameterKey: TopicName
             ParameterValue: a-crs-CloudWatch-Alarms-dev-test
-        parameter-file: cloud-formation/rcc/sns-topic-34/dev.json  
+          - ParameterKey: email
+            ParameterValue: ${{ secrets.NZRB }}  
       int:
         stack-name: 'a-crs-sns-dev-test-int'
         bucket-name: 'nzrb-home-test'

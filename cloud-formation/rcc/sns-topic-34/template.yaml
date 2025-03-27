@@ -19,22 +19,22 @@ Parameters:
       - "red"
       ################################### Tagging Parameters ###################################
     ########### Cost tags ###########
-  # TopicName:
-  #   Type: String
-  #   Default: "A-nzrb-CloudWatch-Alarms"  
-  # email:
-  #   Type: String
-  #   Description: "Email address to receive notifications"
-  #   Default: ""
+  TopicName:
+    Type: String
+    Default: "A-nzrb-CloudWatch-Alarms"  
+  email:
+    Type: String
+    Description: "Email address to receive notifications"
+    Default: ""
   
 
 Resources:
   apiAlarms:
     Type: AWS::SNS::Topic
     Properties: 
-      TopicName: a-crs-CloudWatch-Alarms-int
+      TopicName: !Ref TopicName
       Subscription:
-        - Endpoint: "nazaroboto@click.com"
+        - Endpoint: !Ref email
           Protocol: email
       Tags:
         - Key: riskdomain

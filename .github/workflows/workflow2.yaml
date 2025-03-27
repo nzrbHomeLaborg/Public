@@ -71,67 +71,29 @@ jobs:
             # Розділення шляхів за комою
             IFS=',' read -ra PATHS <<< "$CONFIG_PATH"
             
-            # Масив для збереження результатів матриці
-            MATRICES=()
-            
-            # Перебір кожного шляху
-            for path in "${PATHS[@]}"; do
-            # Очищення від зайвих пробілів
-            path=$(echo "$path" | xargs)
-            
-            # Пошук файлу конфігурації
-            CONFIG_FILE=""
-            for ext in "yaml" "yml"; do
-                if [ -f "$path/deployment-config.$ext" ]; then
-                CONFIG_FILE="$path/deployment-config.$ext"
-                break
-                fi
-            done
-            
-            # Перевірка наявності файлу
-            if [ -z "$CONFIG_FILE" ]; then
-                echo "::warning::No configuration file found in $path"
-                continue
-            fi
-            
-            # Перевірка вмісту файлу
-            echo "Configuration file contents:"
-            cat "$CONFIG_FILE"
-            
             # Встановлення залежностей
             pip install pyyaml jq
             
             # Виклик генератора матриці з додатковою діагностикою
             echo "Running matrix generator with environments: $GITHUB_ENVIRONMENTS"
-            MATRIX=$(GITHUB_ENVIRONMENTS="$GITHUB_ENVIRONMENTS" python cloud-formation/rcc/matrix_generator.py "$CONFIG_FILE")
+            MATRIX=$(GITHUB_ENVIRONMENTS="$GITHUB_ENVIRONMENTS" python cloud-formation/rcc/matrix_generator.py "$PATHS/deployment-config.yml")
             
-            # Виведення результату
-            echo "Generated matrix:"
-            echo "$MATRIX"
+            # Розділення матриці на окремі виводи
+            echo "dev_matrix<<EOF" >> $GITHUB_OUTPUT
+            echo "$MATRIX" | jq '.dev_matrix' >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             
-            # Додавання до масиву матриць
-            MATRICES+=("$MATRIX")
-            done
+            echo "int_matrix<<EOF" >> $GITHUB_OUTPUT
+            echo "$MATRIX" | jq '.int_matrix' >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             
-            # Об'єднання матриць
-            if [ ${#MATRICES[@]} -eq 0 ]; then
-            echo "::error::No matrices generated"
-            exit 1
-            elif [ ${#MATRICES[@]} -eq 1 ]; then
-            # Якщо одна матриця - виводимо її
-            echo "${MATRICES[0]}" >> $GITHUB_OUTPUT
-            else
-            # Якщо кілька матриць - об'єднуємо
-            COMBINED_MATRIX=$(printf '%s\n' "${MATRICES[@]}" | jq -s '
-                {
-                dev_matrix: {include: [.[].dev_matrix.include[]?]},
-                int_matrix: {include: [.[].int_matrix.include[]?]},
-                prod_matrix: {include: [.[].prod_matrix.include[]?]},
-                custom_matrix: {include: [.[].custom_matrix.include[]?]}
-                }
-            ')
-            echo "$COMBINED_MATRIX" >> $GITHUB_OUTPUT
-            fi
+            echo "prod_matrix<<EOF" >> $GITHUB_OUTPUT
+            echo "$MATRIX" | jq '.prod_matrix' >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            echo "custom_matrix<<EOF" >> $GITHUB_OUTPUT
+            echo "$MATRIX" | jq '.custom_matrix' >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
 
   deploy-dev:
     needs: prepare-matrices

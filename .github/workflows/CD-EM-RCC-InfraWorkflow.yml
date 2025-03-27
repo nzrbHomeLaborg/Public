@@ -86,15 +86,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
      
-      # - name: Set up secrets for parameter processing
-      #   id: setup-secrets
-      #   shell: bash
-      #   run: |
-      #     echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
-      #     echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
-      #     cat /tmp/github_secrets.json
-      #     echo "Set up secrets for parameter processing using file method"
-             
+      - name: Set up secrets for parameter processing
+        id: setup-secrets
+        shell: bash
+        run: |
+          echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
+          echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
+          cat /tmp/github_secrets.json
+          echo "Set up secrets for parameter processing using file method"     
      
       - name: Deploy Stack
         uses: ./.github/actions/composite
@@ -110,8 +109,7 @@ jobs:
           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
           extraArgs: ${{ matrix.parameters.extraArgs }}          
           parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: |
-              ${{ matrix.parameters.inline-parameters }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
           tags: ${{ matrix.parameters.tags }}
           aws-region: ${{ matrix.aws_region }}
           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}

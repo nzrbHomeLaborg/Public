@@ -62,55 +62,70 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-    #   - name: Set up Python
-    #     uses: actions/setup-python@v4
-    #     with:
-    #       python-version: '3.x'
-      
-    #   - name: Install dependencies
-    #     run: |
-    #       python -m pip install --upgrade pip
-    #       pip install pyyaml
-      
       - name: Generate Matrix
         id: generate-matrix
         env:
             GITHUB_ENVIRONMENTS: ${{ needs.detect-changes.outputs.specific_environment || 'dev,int,prod' }}
             CONFIG_PATH: ${{ needs.detect-changes.outputs.resource_paths }}
         run: |
-            # Перевірка вмісту змінних середовища
-            echo "CONFIG_PATH: $CONFIG_PATH"
-            echo "Listing directory contents:"
-            ls -la "$CONFIG_PATH"
+            # Розділення шляхів за комою
+            IFS=',' read -ra PATHS <<< "$CONFIG_PATH"
             
-            # Перевірка варіантів імені файлу
-            YAML_FILES=(
-            "$CONFIG_PATH/deployment-config.yaml"
-            "$CONFIG_PATH/deployment-config.yml"
-            "$CONFIG_PATH/config.yaml"
-            "$CONFIG_PATH/config.yml"
-            )
+            # Масив для збереження результатів матриці
+            MATRICES=()
             
+            # Перебір кожного шляху
+            for path in "${PATHS[@]}"; do
+            # Очищення від зайвих пробілів
+            path=$(echo "$path" | xargs)
+            
+            # Пошук файлу конфігурації
             CONFIG_FILE=""
-            for file in "${YAML_FILES[@]}"; do
-            if [ -f "$file" ]; then
-                CONFIG_FILE="$file"
+            for ext in "yaml" "yml"; do
+                if [ -f "$path/deployment-config.$ext" ]; then
+                CONFIG_FILE="$path/deployment-config.$ext"
                 break
-            fi
+                fi
             done
             
+            # Перевірка наявності файлу
             if [ -z "$CONFIG_FILE" ]; then
-            echo "No configuration file found. Tried:"
-            printf '%s\n' "${YAML_FILES[@]}"
-            exit 1
+                echo "::warning::No configuration file found in $path"
+                continue
             fi
             
-            echo "Using config file: $CONFIG_FILE"
+            # Генерація матриці для поточного шляху
+            echo "Processing configuration: $CONFIG_FILE"
             
+            # Встановлення залежностей
             pip install pyyaml
-            matrix=$(python cloud-formation/rcc/matrix_generator.py "$CONFIG_FILE")
-            echo "$matrix" >> $GITHUB_OUTPUT
-            echo "$matrix"
+            
+            # Виклик генератора матриці
+            MATRIX=$(python cloud-formation/rcc/matrix_generator.py "$CONFIG_FILE")
+            
+            # Додавання до масиву матриць
+            MATRICES+=("$MATRIX")
+            done
+            
+            # Об'єднання матриць
+            if [ ${#MATRICES[@]} -eq 0 ]; then
+            echo "::error::No matrices generated"
+            exit 1
+            elif [ ${#MATRICES[@]} -eq 1 ]; then
+            # Якщо одна матриця - виводимо її
+            echo "${MATRICES[0]}" >> $GITHUB_OUTPUT
+            else
+            # Якщо кілька матриць - об'єднуємо
+            COMBINED_MATRIX=$(printf '%s\n' "${MATRICES[@]}" | jq -s '
+                {
+                dev_matrix: {include: [.[].dev_matrix.include[]?]},
+                int_matrix: {include: [.[].int_matrix.include[]?]},
+                prod_matrix: {include: [.[].prod_matrix.include[]?]},
+                custom_matrix: {include: [.[].custom_matrix.include[]?]}
+                }
+            ')
+            echo "$COMBINED_MATRIX" >> $GITHUB_OUTPUT
+            fi
 
   deploy-dev:
     needs: prepare-matrices

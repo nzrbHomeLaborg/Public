@@ -79,6 +79,7 @@ jobs:
           CONFIG_PATH: ${{ needs.detect-changes.outputs.resource_paths }}
         shell: bash  
         run: |
+          set -e
           # Підготовка шляху до конфігураційного файлу
           FULL_CONFIG_PATH="${CONFIG_PATH}/deployment-config.yml"
           

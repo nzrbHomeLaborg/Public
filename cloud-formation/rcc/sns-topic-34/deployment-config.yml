@@ -38,6 +38,9 @@ deployments:
         inline-parameters:
           - ParameterKey: TopicName
             ParameterValue: a-crs-CloudWatch-Alarms-dev-test
+          - ParameterKey: email
+            ParameterValue: ${{secrets.NZRB}}            
+
 
       int:
         stack-name: 'a-crs-sns-dev-test-int'

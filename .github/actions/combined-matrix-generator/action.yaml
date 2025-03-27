@@ -39,33 +39,33 @@ runs:
           sudo mv ${BINARY} /usr/bin/yq || mkdir -p $HOME/bin && mv ${BINARY} $HOME/bin/yq && echo "$HOME/bin" >> $GITHUB_PATH
         fi
 
-      - name: Generate deployment matrices
-        id: generate-matrices
-        shell: bash
-        env:
-          GITHUB_SECRETS: ${{ toJson(secrets) }}
-        run: |
-          replace_secrets() {
-            local input="$1"
-            echo "$input" | jq --argjson secrets "$GITHUB_SECRETS" '
-              def replace_secret($input):
-                $input | gsub("\\$\\{\\{ secrets\\.([A-Z_]+) \\}\\}"; 
-                  if $secrets[$1] then $secrets[$1] else $input end);
-              
-              walk(
-                if type == "string" then 
-                  replace_secret(.)
-                else 
-                  .
-              )
-            '
-          }
-  
-          # ... решта попереднього коду ...
-  
-          # Модифікуємо обробку PARAMS
-          PARAMS=$(echo "$CONFIG_CONTENT" | jq -c --arg env "$ENV" '.deployments[0].parameters[$env]')
-          PARAMS=$(replace_secrets "$PARAMS")
+    - name: Generate deployment matrices
+      id: generate-matrices
+      shell: bash
+      env:
+        GITHUB_SECRETS: ${{ toJson(secrets) }}
+      run: |
+        replace_secrets() {
+          local input="$1"
+          echo "$input" | jq --argjson secrets "$GITHUB_SECRETS" '
+            def replace_secret($input):
+              $input | gsub("\\$\\{\\{ secrets\\.([A-Z_]+) \\}\\}"; 
+                if $secrets[$1] then $secrets[$1] else $input end);
+            
+            walk(
+              if type == "string" then 
+                replace_secret(.)
+              else 
+                .
+            )
+          '
+        }
+
+        # ... решта попереднього коду ...
+
+        # Модифікуємо обробку PARAMS
+        PARAMS=$(echo "$CONFIG_CONTENT" | jq -c --arg env "$ENV" '.deployments[0].parameters[$env]')
+        PARAMS=$(replace_secrets "$PARAMS")
 
         # Initialize empty arrays for matrix items
         DEV_MATRIX_ITEMS=()

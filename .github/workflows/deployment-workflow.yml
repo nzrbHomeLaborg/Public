@@ -1,0 +1,70 @@
+name: CD-EM-RCC-Deploy-Resource
+
+on:
+  workflow_dispatch:
+    inputs:
+      matrix_item:
+        description: 'JSON string of matrix item'
+        required: true
+        type: string
+      github_sha:
+        description: 'GitHub SHA to checkout'
+        required: true
+        type: string
+
+jobs:
+  deploy-resource:
+    runs-on: ${{ fromJSON(inputs.matrix_item).runner }}
+    environment: ${{ fromJSON(inputs.matrix_item).github_environment }}
+    name: Deploy ${{ fromJSON(inputs.matrix_item).application }}-${{ fromJSON(inputs.matrix_item).resource }} to ${{ fromJSON(inputs.matrix_item).environment }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.github_sha }}
+      
+      # Process parameters before deployment to handle SECRET: placeholders
+      - name: Process deployment parameters
+        id: process-params
+        run: |
+          # Parse matrix item
+          MATRIX_ITEM='${{ inputs.matrix_item }}'
+          
+          # Process any SECRET: placeholders in inline parameters
+          if [[ $(echo "$MATRIX_ITEM" | jq -r '.parameters.inline-parameters') != "null" ]]; then
+            INLINE_PARAMS=$(echo "$MATRIX_ITEM" | jq -r '.parameters.inline-parameters')
+            
+            # Process and rewrite each parameter that has SECRET: placeholder
+            PROCESSED_PARAMS=$(echo "$INLINE_PARAMS" | jq -c 'map(
+              if .ParameterValue != null and (.ParameterValue | type) == "string" and (.ParameterValue | startswith("SECRET:")) then
+                .ParameterValue = secrets[.ParameterValue[7:]]
+              else . end
+            )')
+            
+            echo "processed_inline_parameters=$PROCESSED_PARAMS" >> $GITHUB_OUTPUT
+          else
+            echo "processed_inline_parameters=[]" >> $GITHUB_OUTPUT
+          fi
+      
+      # Deploy using your composite action
+      - name: Deploy Stack
+        uses: ./.github/actions/composite
+        with:
+          environment: ${{ fromJSON(inputs.matrix_item).environment }}
+          stack-name: ${{ fromJSON(inputs.matrix_item).parameters.stack-name }}
+          bucket-name: ${{ fromJSON(inputs.matrix_item).parameters.bucket-name }}
+          upload-to-s3: ${{ fromJSON(inputs.matrix_item).parameters.bucket-upload }}
+          target-folder: ${{ fromJSON(inputs.matrix_item).parameters.target-folder }}
+          source-folder: ${{ fromJSON(inputs.matrix_item).parameters.source-folder }}
+          template-name: ${{ fromJSON(inputs.matrix_item).parameters.template-name }}
+          filename-patterns: ${{ fromJSON(inputs.matrix_item).parameters.filename-patterns }}
+          cfnLintEnabled: ${{ fromJSON(inputs.matrix_item).parameters.cfnLintEnabled }}
+          extraArgs: ${{ fromJSON(inputs.matrix_item).parameters.extraArgs }}
+          parameter-file: ${{ fromJSON(inputs.matrix_item).parameters.parameter-file }}
+          inline-parameters: ${{ steps.process-params.outputs.processed_inline_parameters }}
+          tags: ${{ fromJSON(inputs.matrix_item).parameters.tags }}
+          aws-region: ${{ fromJSON(inputs.matrix_item).aws_region }}
+          aws-role-to-assume: ${{ secrets[fromJSON(inputs.matrix_item).aws_role_secret] }}
+          cfn-role-arn: ${{ secrets[fromJSON(inputs.matrix_item).cfn_role_secret] }}
+          iam-execution-role-arn: ${{ secrets[fromJSON(inputs.matrix_item).iam_role_secret] }}

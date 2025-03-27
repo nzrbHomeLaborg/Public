@@ -165,7 +165,7 @@ def load_github_secrets():
                 logger.info(f"{BLUE}Removed secrets file after reading{RESET}")
             except:
                 pass
-            return secrets       
+            return secrets
         except Exception as e:
             logger.error(f"Error reading secrets from file: {e}")
     

@@ -85,15 +85,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-     
-      - name: Set up environment-specific secrets
-        id: setup-secrets
-        shell: bash
-        run: |
-          # Закодуємо всі секрети як JSON рядок в змінній середовища
-          echo "GITHUB_SECRETS_JSON='${{ toJSON(secrets) }}'" >> $GITHUB_ENV
-          echo "Set up secrets as environment variable"
-     
+
       - name: Deploy Stack
         uses: ./.github/actions/composite
         with:

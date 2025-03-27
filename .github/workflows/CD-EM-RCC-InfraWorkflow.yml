@@ -97,10 +97,18 @@ jobs:
           PROCESSED_PARAM_FILE=""
           INLINE_PARAMS='${{ toJSON(matrix.parameters.inline-parameters) }}'
           
-          # Process both parameter file and inline parameters
+          # Debug: Show what we're working with
+          echo "DEBUG: Processing parameter file: $PARAM_FILE"
+          echo "DEBUG: Available secrets in environment:"
+          env | grep "^SECRETS_" | cut -d= -f1 || echo "No secrets found"
+          
+          # Debug: Show file content before processing
           if [[ -n "$PARAM_FILE" && "$PARAM_FILE" != "null" && -f "$PARAM_FILE" ]]; then
+            echo "DEBUG: Parameter file content before processing:"
+            cat "$PARAM_FILE"
             PROCESSED_PARAM_FILE="$TEMP_DIR/processed-params.json"
           else
+            echo "DEBUG: Parameter file not found or not specified"
             PROCESSED_PARAM_FILE="$PARAM_FILE"
           fi
           
@@ -108,10 +116,23 @@ jobs:
           chmod +x .github/scripts/process-parameters.sh
           
           # Call script with inline parameters
+          echo "DEBUG: Calling process-parameters.sh"
           SCRIPT_OUTPUT=$(.github/scripts/process-parameters.sh "$PARAM_FILE" "$PROCESSED_PARAM_FILE" "$INLINE_PARAMS")
+          echo "DEBUG: Script output:"
+          echo "$SCRIPT_OUTPUT"
+          
+          # Debug: Show file content after processing
+          if [[ -f "$PROCESSED_PARAM_FILE" ]]; then
+            echo "DEBUG: Parameter file content after processing:"
+            cat "$PROCESSED_PARAM_FILE"
+          fi
           
           # Extract the inline parameters output from the script response
           PROCESSED_INLINE_PARAMS=$(echo "$SCRIPT_OUTPUT" | grep "^inline_params_output=" | sed 's/^inline_params_output=//')
+          
+          # Debug: Show processed inline parameters
+          echo "DEBUG: Processed inline parameters:"
+          echo "$PROCESSED_INLINE_PARAMS"
           
           # Set outputs
           echo "param_file=$PROCESSED_PARAM_FILE" >> $GITHUB_OUTPUT

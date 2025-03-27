@@ -120,6 +120,7 @@ jobs:
             echo "inline_params=$PROCESSED_INLINE_PARAMS" >> $GITHUB_OUTPUT
           else
             echo "inline_params=$INLINE_PARAMS" >> $GITHUB_OUTPUT
+          fi
      
       - name: Deploy Stack
         uses: ./.github/actions/composite

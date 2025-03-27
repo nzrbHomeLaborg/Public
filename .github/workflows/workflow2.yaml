@@ -64,26 +64,10 @@ jobs:
           resource_paths: ${{ needs.detect-changes.outputs.resource_paths }}
           specific_environment: ${{ needs.detect-changes.outputs.specific_environment }}
 
-  call-deploy-workflows-dev:
+  deploy-matrix-items:
     needs: prepare-matrices
     if: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix) }}
-      fail-fast: false
-    name: Trigger DEV deployment for ${{ matrix.application }}-${{ matrix.resource }}
-    steps:
-      - name: Call Deployment Workflow
-        uses: actions/github-script@v6
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'deployment-workflow.yml',
-              ref: context.ref,
-              inputs: {
-                matrix_item: JSON.stringify(${{ toJSON(matrix) }}),
-                github_sha: '${{ github.sha }}'
-              }
-            });
+    uses: ./.github/workflows/deploy-resource.yml
+    with:
+        matrix_json: ${{ needs.prepare-matrices.outputs.dev_matrix }}
+        environment_type: "dev"

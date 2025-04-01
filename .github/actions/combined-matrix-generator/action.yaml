@@ -122,19 +122,18 @@ runs:
             # Check if custom deployment is enabled for this environment
             CUSTOM_DEPLOYMENT=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].custom_deployment // "false"')
             echo "Custom deployment for $ENV: $CUSTOM_DEPLOYMENT"
-            echo "custom_deployment_after<<EOF" >> $GITHUB_OUTPUT
-            echo $(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].custom_deployment_after // "dev"') >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            DEPLOY_AFTER=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].deploy_after // "dev"')
+
             # Skip if any required field is empty
             if [[ -z "$PARAMS" || "$PARAMS" == "null" || -z "$RUNNER" || "$RUNNER" == "null" || 
                   -z "$GH_ENV" || "$GH_ENV" == "null" || -z "$AWS_REGION" || "$AWS_REGION" == "null" ]]; then
               echo "::warning::Missing required configuration for $RESOURCE_PATH in $ENV environment"
               continue
             fi
-            
+            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"github_vars\":$VARS_CONFIG,\"deploy_after\":\"$DEPLOY_AFTER\",\"parameters\":$PARAMS}" 
             # Just pass through the parameters as-is
             # The GitHub secrets will be resolved during workflow execution
-            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"github_vars\":$VARS_CONFIG,\"parameters\":$PARAMS}"
+            # MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"github_vars\":$VARS_CONFIG,\"parameters\":$PARAMS}"
 
             # Add to appropriate matrix based on environment
             if [[ "$ENV" == "dev" ]]; then

@@ -144,32 +144,17 @@ def main():
 
 def load_github_secrets_from_env():
     """
-    Load GitHub secrets directly from environment variables
-    
-    Returns:
-        dict: Dictionary with secret names as keys and their values
+    Load GitHub secrets from prefixed environment variables
     """
     secrets = {}
     
-    # Спочатку спробуємо отримати секрети з JSON в змінній середовища
-    try:
-        secrets_json = os.environ.get('GITHUB_SECRETS', '{}')
-        secrets = json.loads(secrets_json)
-        logger.info(f"{BLUE}Loaded secrets from GITHUB_SECRETS environment variable{RESET}")
-        logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing GITHUB_SECRETS JSON: {e}")
+    for key, value in os.environ.items():
+        if key.startswith('SECRET_'):
+            # Видалити префікс 'SECRET_'
+            actual_key = key[7:]  # 'SECRET_' має довжину 7
+            secrets[actual_key] = value
     
-    if not secrets:
-        logger.info(f"{YELLOW}No secrets found in GITHUB_SECRETS, using environment variables{RESET}")
-        
-        env_var_count = 0
-        for key, value in os.environ.items():
-            if not key.startswith('GITHUB_') and not key.startswith('INPUT_'):
-                secrets[key] = value
-                env_var_count += 1
-        
-        logger.info(f"{BLUE}Loaded {env_var_count} environment variables as potential secrets{RESET}")
+    logger.info(f"{BLUE}Loaded {len(secrets)} prefixed environment variables as secrets{RESET}")
     
     return secrets
 

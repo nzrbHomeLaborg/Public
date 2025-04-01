@@ -91,7 +91,7 @@ jobs:
         run: |
           # Створюємо префікс для всіх секретів
           for secret in $(env | grep -v "^GITHUB_" | cut -d= -f1); do
-            echo "SECRET_${secret}=${!secret}" >> $GITHUB_ENV
+            echo "CRS_${secret}=${!secret}" >> $GITHUB_ENV
           done
           echo "Set up secrets for parameter processing using prefixed environment variables"
         

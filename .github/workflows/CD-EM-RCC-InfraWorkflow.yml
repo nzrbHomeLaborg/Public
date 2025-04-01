@@ -106,7 +106,7 @@ jobs:
           filename-patterns: ${{ matrix.parameters.filename-patterns }}
           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
           extraArgs: ${{ matrix.parameters.extraArgs }}          
-          parameter-file: ${{ matrix.parameters.processed-param-file }}
+          parameter-file: ${{ matrix.parameters.parameter-file }}
           inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
           tags: ${{ matrix.parameters.tags }}
           aws-region: ${{ matrix.aws_region }}

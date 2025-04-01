@@ -22,7 +22,9 @@ outputs:
   custom_matrix:
     description: 'Matrix for custom deployments (stg, int-dr, etc)'
     value: ${{ steps.generate-matrices.outputs.custom_matrix }}
-
+  custom_deployment_after:
+    description: 'When to run custom deployments (dev, int, prod)'
+    value: ${{ steps.generate-matrices.outputs.custom_deployment_after }}
 runs:
   using: "composite"
   steps:
@@ -120,7 +122,9 @@ runs:
             # Check if custom deployment is enabled for this environment
             CUSTOM_DEPLOYMENT=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].custom_deployment // "false"')
             echo "Custom deployment for $ENV: $CUSTOM_DEPLOYMENT"
-            
+            echo "custom_deployment_after<<EOF" >> $GITHUB_OUTPUT
+            echo $(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].custom_deployment_after // "dev"') >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             # Skip if any required field is empty
             if [[ -z "$PARAMS" || "$PARAMS" == "null" || -z "$RUNNER" || "$RUNNER" == "null" || 
                   -z "$GH_ENV" || "$GH_ENV" == "null" || -z "$AWS_REGION" || "$AWS_REGION" == "null" ]]; then

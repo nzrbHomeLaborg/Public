@@ -110,7 +110,11 @@ def load_github_secrets():
         if not key.startswith('GITHUB_') and not key.startswith('INPUT_') and not key.startswith('RUNNER_'):
             secrets[key] = value
     
+    # Log available secret names (NOT VALUES) for debugging
     logger.info(f"{BLUE}Loaded {len(secrets)} potential secrets from environment variables{RESET}")
+    if len(secrets) > 0:
+        logger.info(f"{BLUE}Available secret names: {', '.join(sorted(secrets.keys()))}{RESET}")
+    
     return secrets
 
 def store_encrypted_secrets(secrets, salt_key, output_path=None):
@@ -168,6 +172,23 @@ def read_encrypted_secrets(encrypted_file_path, salt_key):
         logger.error(f"{RED}Failed to read/decrypt secrets: {e}{RESET}")
         return {}
 
+def extract_secret_name(value):
+    """
+    Extract secret name from a parameter value string
+    
+    Args:
+        value (str): Parameter value that might contain a secret reference
+        
+    Returns:
+        tuple: (is_secret, secret_name)
+    """
+    # Check different formats of secret references
+    for prefix in ["SECRET:", "SECRET.", "SECRETS:", "SECRETS."]:
+        if isinstance(value, str) and value.startswith(prefix):
+            return True, value[len(prefix):]
+    
+    return False, None
+
 def process_parameters_with_secrets(parameters, secrets):
     """
     Process parameters and replace SECRET: references with actual values
@@ -182,25 +203,27 @@ def process_parameters_with_secrets(parameters, secrets):
     if isinstance(parameters, list):
         # For list format (ParameterKey/ParameterValue)
         for param in parameters:
-            if isinstance(param.get("ParameterValue"), str) and param["ParameterValue"].startswith("SECRET:"):
-                secret_name = param["ParameterValue"].replace("SECRET:", "")
+            is_secret, secret_name = extract_secret_name(param.get("ParameterValue", ""))
+            if is_secret:
                 if secret_name in secrets:
                     logger.info(f"{GREEN}Replacing SECRET:{secret_name} with actual secret value{RESET}")
                     param["ParameterValue"] = secrets[secret_name]
                 else:
                     logger.warning(f"{YELLOW}Secret {secret_name} not found in available secrets{RESET}")
+                    logger.warning(f"{YELLOW}Make sure the secret exists in GitHub repository settings{RESET}")
         return parameters
     elif isinstance(parameters, dict):
         # For dictionary format
         processed = {}
         for key, value in parameters.items():
-            if isinstance(value, str) and value.startswith("SECRET:"):
-                secret_name = value.replace("SECRET:", "")
+            is_secret, secret_name = extract_secret_name(value)
+            if is_secret:
                 if secret_name in secrets:
                     logger.info(f"{GREEN}Replacing SECRET:{secret_name} with actual secret value{RESET}")
                     processed[key] = secrets[secret_name]
                 else:
                     logger.warning(f"{YELLOW}Secret {secret_name} not found in available secrets{RESET}")
+                    logger.warning(f"{YELLOW}Make sure the secret exists in GitHub repository settings{RESET}")
                     processed[key] = value
             else:
                 processed[key] = value

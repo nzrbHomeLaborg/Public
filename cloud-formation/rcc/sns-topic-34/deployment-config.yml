@@ -10,8 +10,8 @@ deployments:
       stg: custom
     github_environments:
       dev: CD-EM-CRS-DEV
-      int: CD-EM-CRS-INT
-      stg: CD-EM-CRS-INT
+      int: CD-EM-CRS-DEV
+      stg: CD-EM-CRS-DEV
     aws_regions:
       dev: us-east-1
       int: us-east-1
@@ -58,5 +58,20 @@ deployments:
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
         inline-parameters:
+          - ParameterKey: TopicName
+            ParameterValue: A-topic-1
           - ParameterKey: email
-            ParameterValue: vezarqrchik@gmail.com          
+            ParameterValue: vezarqrchik@gmail.com            
+      int:
+        stack-name: 'a-crs-sns-dev-test-24'
+        bucket-name: 'nzrb-home-test'
+        bucket-upload: 'true'
+        target-folder: cloud-formation/rcc/sns-topic-34
+        source-folder: cloud-formation/rcc/sns-topic-34
+        # filename-patterns: "*.yaml"
+        template-name: 'template.yaml'
+        inline-parameters:
+          - ParameterKey: TopicName
+            ParameterValue: A-topic-2
+          - ParameterKey: email
+            ParameterValue: vezarqrchik@gmail.com            

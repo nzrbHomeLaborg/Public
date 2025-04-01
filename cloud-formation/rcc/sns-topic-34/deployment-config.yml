@@ -49,7 +49,7 @@ deployments:
             ParameterValue: vezarqrchik@gmail.com
       stg:
         custom_deployment: true
-        custom_deployment_after: "int"
+        deploy_after: "int"
         stack-name: 'a-crs-sns-dev-test-18'
         bucket-name: 'nzrb-home-test'
         bucket-upload: 'true'

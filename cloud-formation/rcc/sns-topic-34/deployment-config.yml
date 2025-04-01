@@ -3,29 +3,40 @@ deployments:
     environments:
       - dev
       - int
+      - stg
+    needs:
+      stg: [deploy-dev]      
     runners:
       dev: custom
       int: custom
+      stg: custom
     github_environments:
       dev: CD-EM-CRS-DEV
       int: CD-EM-CRS-INT
+      stg: CD-EM-CRS-INT
     aws_regions:
       dev: us-east-1
       int: us-east-1
+      stg: us-east-1
     aws_role_secrets:
       dev: AWS_ROLE_TO_ASSUME
       int: AWS_ROLE_TO_ASSUME
+      stg: AWS_ROLE_TO_ASSUME
     cfn_role_secrets:
       dev: CFN_ROLE_ARN
       int: CFN_ROLE_ARN
+      stg: CFN_ROLE_ARN
     iam_execution_role_secrets:
       dev: IAM_EXECUTION_ROLE_ARN
       int: IAM_EXECUTION_ROLE_ARN
+      stg: IAM_EXECUTION_ROLE_ARN
     github_vars:
       dev:
         tags: A_CRS_TAGS
       int: 
         tags: A_CRS_TAGS  
+      stg:
+        tags: A_CRS_TAGS 
     parameters:
       dev:
         stack-name: 'a-crs-sns-dev-test-24'
@@ -38,4 +49,15 @@ deployments:
         inline-parameters:
           - ParameterKey: email
             ParameterValue: vezarqrchik@gmail.com
-          
+      stg:
+        custom-deployments: true
+        stack-name: 'a-crs-sns-dev-test-18'
+        bucket-name: 'nzrb-home-test'
+        bucket-upload: 'true'
+        target-folder: cloud-formation/rcc/sns-topic-34
+        source-folder: cloud-formation/rcc/sns-topic-34
+        # filename-patterns: "*.yaml"
+        template-name: 'template.yaml'
+        inline-parameters:
+          - ParameterKey: email
+            ParameterValue: vezarqrchik@gmail.com          

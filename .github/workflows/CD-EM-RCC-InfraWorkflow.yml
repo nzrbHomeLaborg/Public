@@ -118,3 +118,42 @@ jobs:
           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
           SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
          
+
+  deploy-custom:
+    needs: 
+      - prepare-matrices
+      - ${{ matrix.needs }}
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
+    
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to ${{ matrix.environment }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Deploy Stack
+        uses: cat-digital-platform/CD-GitHub-Actions/aws-cfn-lint-upload-create-update-composite@nazar/1853441/eqm-compose-actions
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+          cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
+          iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
+          SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}      

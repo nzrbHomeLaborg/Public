@@ -86,11 +86,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-        - name: Set up secrets for parameter processing
+      - name: Set up secrets for parameter processing
         id: setup-secrets
         shell: bash
         run: |
-          sudo apt-get update && sudo apt-get install -y openssl
+          apt-get update && apt-get install -y openssl
           
           echo '${{ toJSON(secrets) }}' > /tmp/github_secrets_plaintext.json
           

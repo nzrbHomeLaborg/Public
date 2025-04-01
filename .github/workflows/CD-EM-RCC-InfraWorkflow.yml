@@ -132,7 +132,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+      - name: Install yq
+        shell: bash
+        run: |
+          if ! command -v yq &> /dev/null; then
+            echo "Installing yq..."
+            VERSION=v4.30.8
+            BINARY=yq_linux_amd64
+            wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - | \
+              tar xz
+            chmod +x ${BINARY}
+            sudo mv ${BINARY} /usr/bin/yq || mkdir -p $HOME/bin && mv ${BINARY} $HOME/bin/yq && echo "$HOME/bin" >> $GITHUB_PATH
+          fi      
       - name: Check prerequisite jobs
         shell: bash
         run: |

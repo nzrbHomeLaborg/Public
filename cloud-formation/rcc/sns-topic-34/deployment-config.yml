@@ -28,14 +28,12 @@ deployments:
         tags: A_CRS_TAGS  
     parameters:
       dev:
-        stack-name: 'a-crs-sns-dev-test-1е'
+        stack-name: 'a-crs-sns-dev-test-24'
         bucket-name: 'nzrb-home-test'
         bucket-upload: 'true'
         target-folder: cloud-formation/rcc/sns-topic-34
         source-folder: cloud-formation/rcc/sns-topic-34
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
-        inline-parameters:
-          - ParameterKey: email
-            ParameterValue: SECRET:DOCKER_ENABLED
+        parameter-file: cloud-formation/rcc/sns-topic-34/dev.json 
           

@@ -1,6 +1,6 @@
 [
     {
       "ParameterKey": "email",
-      "ParameterValue": "SECRET.NZRB"
+      "ParameterValue": "SECRET:DOCKER_ENABLED"
     }
 ]

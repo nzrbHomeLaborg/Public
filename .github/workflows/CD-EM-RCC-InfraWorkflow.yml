@@ -89,8 +89,9 @@ jobs:
         id: setup-secrets
         shell: bash
         run: |
-          echo "GITHUB_SECRETS=${{ secrets }}" >> $GITHUB_ENV
-          echo "Set up secrets for parameter processing using in-memory method"
+          echo '${{ toJSON(secrets) }}' > /tmp/github_secrets.json
+          echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.json" >> $GITHUB_ENV
+          echo "Set up secrets for parameter processing using file method"  
         
       - name: Deploy Stack
         uses: ./.github/actions/composite

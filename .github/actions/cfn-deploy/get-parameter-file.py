@@ -26,8 +26,7 @@ def main():
     parameter_file_path = os.environ.get('INPUT_PARAMETER_OVERRIDES', '')
     inline_parameters = os.environ.get('INPUT_INLINE_JSON_PARAMETERS', '').strip()
     
-    # Отримуємо всі секрети безпосередньо з середовища
-    github_secrets = load_github_secrets_from_env()
+    github_secrets = load_github_secrets()
     
     tmp_path = f"/tmp/{github_run_id}{github_run_number}"
     param_file = f"{tmp_path}/cfn-parameter-{github_run_id}-{github_run_number}.json"
@@ -142,19 +141,49 @@ def main():
             f.write("PARAM_FILE=\n")
 
 
-def load_github_secrets_from_env():
+def load_github_secrets():
     """
-    Load GitHub secrets from prefixed environment variables
+    Load GitHub secrets from environment variables or file
+    
+    Returns:
+        dict: Dictionary with secret names as keys and their values
     """
     secrets = {}
     
-    for key, value in os.environ.items():
-        if key.startswith('SECRET_'):
-            # Видалити префікс 'SECRET_'
-            actual_key = key[7:]  # 'SECRET_' має довжину 7
-            secrets[actual_key] = value
+    secrets_path = os.environ.get('GITHUB_SECRETS_PATH', '')
+    if secrets_path and os.path.exists(secrets_path):
+        try:
+            with open(secrets_path, 'r') as f:
+                secrets = json.load(f)
+            logger.info(f"{BLUE}Loaded secrets from file: {secrets_path}{RESET}")
+            logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
+            try:
+                os.remove(secrets_path)
+                logger.info(f"{BLUE}Removed secrets file after reading{RESET}")
+            except:
+                pass
+            return secrets       
+        except Exception as e:
+            logger.error(f"Error reading secrets from file: {e}")
     
-    logger.info(f"{BLUE}Loaded {len(secrets)} prefixed environment variables as secrets{RESET}")
+    try:
+        secrets_json = os.environ.get('GITHUB_SECRETS', '{}')
+        secrets = json.loads(secrets_json)
+        logger.info(f"{BLUE}Loaded secrets from GITHUB_SECRETS environment variable{RESET}")
+        logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing GITHUB_SECRETS JSON: {e}")
+    
+    if not secrets:
+        logger.info(f"{YELLOW}No secrets found via preferred methods, using environment variables{RESET}")
+        
+        env_var_count = 0
+        for key, value in os.environ.items():
+            if not key.startswith('GITHUB_') and not key.startswith('INPUT_'):
+                secrets[key] = value
+                env_var_count += 1
+        
+        logger.info(f"{BLUE}Loaded {env_var_count} environment variables as potential secrets{RESET}")
     
     return secrets
 

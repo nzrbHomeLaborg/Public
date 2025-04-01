@@ -75,15 +75,14 @@ def main():
         else:
             logger.warning(f"Could not read parameters from file: {parameter_file_path}")
     
-    # Process inline parameters if provided
+
     if inline_parameters and inline_parameters != 'null':
         logger.info(f"{BLUE}inline-json-parameters are available.{RESET}")
         
         try:
-            # Attempt to parse the inline parameters
+
             inline_params = json.loads(inline_parameters)
             
-            # If it's not a list, convert to list of parameter dictionaries
             if not isinstance(inline_params, list):
                 inline_params_list = []
                 for key, value in inline_params.items():
@@ -92,11 +91,9 @@ def main():
                         "ParameterValue": value
                     })
                 inline_params = inline_params_list
-            
-            # Create a mapping of existing parameter keys
             existing_params = {param["ParameterKey"]: i for i, param in enumerate(combined_parameters)}
             
-            # Process each inline parameter
+
             for param in inline_params:
                 key = param["ParameterKey"]
 
@@ -109,20 +106,16 @@ def main():
                         logger.warning(f"{YELLOW}Secret {secret_name} not found in available secrets{RESET}")
                 
                 if key in existing_params:
-                    # Override existing parameter
                     combined_parameters[existing_params[key]] = param
                 else:
-                    # Add new parameter
                     combined_parameters.append(param)
                 
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing inline JSON parameters: {e}")
             logger.error(f"Raw value: {inline_parameters}")
-            # Log the error but don't exit if file parameters exist
             if not combined_parameters:
                 sys.exit(1)
-    
-    # Write the combined parameters to a file if we have any
+
     if combined_parameters:
         try:
             Path(tmp_path).mkdir(parents=True, exist_ok=True)
@@ -161,24 +154,21 @@ def load_github_secrets():
             import hashlib
             import subprocess
             
-            # Створюємо такий самий ключ, як при шифруванні
             key = hashlib.sha256(salt_key.encode()).hexdigest()
             
             try:
-                # Розшифровуємо файл за допомогою openssl з тими ж параметрами, що й при шифруванні
                 result = subprocess.run(
                     ['openssl', 'enc', '-d', '-aes-256-cbc', '-pbkdf2', '-iter', '10000', '-salt', 
                      '-in', secrets_path, 
                      '-pass', f'pass:{key}'],
                     capture_output=True, text=True, check=True
                 )
-                
-                # Розбираємо JSON з розшифрованих даних
+
                 secrets = json.loads(result.stdout)
                 logger.info(f"{BLUE}Successfully decrypted and loaded secrets from file: {secrets_path}{RESET}")
                 logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
                 
-                # Видаляємо зашифрований файл з секретами для безпеки
+
                 try:
                     os.remove(secrets_path)
                     logger.info(f"{BLUE}Removed encrypted secrets file after reading{RESET}")
@@ -194,7 +184,6 @@ def load_github_secrets():
     else:
         logger.warning(f"{YELLOW}No secrets file found at {secrets_path}{RESET}")
     
-    # Якщо не вдалося розшифрувати файл, спробуємо інші методи
     if not secrets:
         logger.info(f"{YELLOW}Failed to load secrets from encrypted file. Trying environment variables.{RESET}")
         

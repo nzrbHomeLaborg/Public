@@ -28,7 +28,7 @@ deployments:
         tags: A_CRS_TAGS  
     parameters:
       dev:
-        stack-name: 'a-crs-sns-dev-test-1'
+        stack-name: 'a-crs-sns-dev-test-2'
         bucket-name: 'nzrb-home-test'
         bucket-upload: 'true'
         target-folder: cloud-formation/rcc/sns-topic-34

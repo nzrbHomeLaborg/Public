@@ -85,13 +85,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Process Parameters Securely
-        id: process-params
-        uses: ./.github/actions/secure-secrets-action
-        with:
-          salt-key: ${{ secrets.SECRET_SALT_KEY }}
-          parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}   
+      - name: Set up secrets for parameter processing
+        id: setup-secrets
+        shell: bash
+        run: |
+          # Передаємо секрети через змінну середовища у форматі JSON
+          echo "GITHUB_SECRETS='${{ toJSON(secrets) }}'" >> $GITHUB_ENV
+          echo "Set up secrets for parameter processing using in-memory method" 
         
       - name: Deploy Stack
         uses: ./.github/actions/composite
@@ -106,7 +106,7 @@ jobs:
           filename-patterns: ${{ matrix.parameters.filename-patterns }}
           cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
           extraArgs: ${{ matrix.parameters.extraArgs }}          
-          parameter-file: ${{ steps.process-params.outputs.processed-param-file }}
+          parameter-file: ${{ matrix.parameters.processed-param-file }}
           inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
           tags: ${{ matrix.parameters.tags }}
           aws-region: ${{ matrix.aws_region }}

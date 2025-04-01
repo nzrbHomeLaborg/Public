@@ -14,7 +14,6 @@ logger = logging.getLogger()
 BLUE = "\033[36m"
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
-RED = "\033[31m"
 RESET = "\033[0m"
 
 def main():
@@ -27,8 +26,8 @@ def main():
     parameter_file_path = os.environ.get('INPUT_PARAMETER_OVERRIDES', '')
     inline_parameters = os.environ.get('INPUT_INLINE_JSON_PARAMETERS', '').strip()
     
-    # Отримуємо секрети з змінних середовища
-    github_secrets = load_github_secrets()
+    # Отримуємо всі секрети безпосередньо з середовища
+    github_secrets = load_github_secrets_from_env()
     
     tmp_path = f"/tmp/{github_run_id}{github_run_number}"
     param_file = f"{tmp_path}/cfn-parameter-{github_run_id}-{github_run_number}.json"
@@ -43,15 +42,11 @@ def main():
             file_parameters = read_from_local(local_path)
         
         if file_parameters:
-            # Обробляємо секрети в параметрах з файлу
+        
             if isinstance(file_parameters, list):
-                # Для формату списку об'єктів з ParameterKey/ParameterValue
                 for param in file_parameters:
-                    if isinstance(param.get("ParameterValue"), str) and (
-                        param["ParameterValue"].startswith("SECRET:") or 
-                        param["ParameterValue"].startswith("SECRET.")
-                    ):
-                        secret_name = param["ParameterValue"].replace("SECRET:", "").replace("SECRET.", "")
+                    if isinstance(param.get("ParameterValue"), str) and param["ParameterValue"].startswith("SECRET:"):
+                        secret_name = param["ParameterValue"].replace("SECRET:", "")
                         if secret_name in github_secrets:
                             logger.info(f"{GREEN}Replacing SECRET:{secret_name} in parameter file with actual secret value{RESET}")
                             param["ParameterValue"] = github_secrets[secret_name]
@@ -59,14 +54,11 @@ def main():
                             logger.warning(f"{YELLOW}Secret {secret_name} not found in available secrets{RESET}")
                 combined_parameters = file_parameters
             else:
-                # Для формату словника key:value
+           
                 parameter_dict = {}
                 for key, value in file_parameters.items():
-                    if isinstance(value, str) and (
-                        value.startswith("SECRET:") or 
-                        value.startswith("SECRET.")
-                    ):
-                        secret_name = value.replace("SECRET:", "").replace("SECRET.", "")
+                    if isinstance(value, str) and value.startswith("SECRET:"):
+                        secret_name = value.replace("SECRET:", "")
                         if secret_name in github_secrets:
                             logger.info(f"{GREEN}Replacing SECRET:{secret_name} in parameter file with actual secret value{RESET}")
                             parameter_dict[key] = github_secrets[secret_name]
@@ -75,8 +67,7 @@ def main():
                             parameter_dict[key] = value
                     else:
                         parameter_dict[key] = value
-                        
-                # Конвертуємо у формат списку для CloudFormation
+               
                 for key, value in parameter_dict.items():
                     combined_parameters.append({
                         "ParameterKey": key,
@@ -110,12 +101,8 @@ def main():
             for param in inline_params:
                 key = param["ParameterKey"]
 
-                # Обробка секретів в інлайн-параметрах
-                if isinstance(param["ParameterValue"], str) and (
-                    param["ParameterValue"].startswith("SECRET:") or 
-                    param["ParameterValue"].startswith("SECRET.")
-                ):
-                    secret_name = param["ParameterValue"].replace("SECRET:", "").replace("SECRET.", "")
+                if isinstance(param["ParameterValue"], str) and param["ParameterValue"].startswith("SECRET:"):
+                    secret_name = param["ParameterValue"].replace("SECRET:", "")
                     if secret_name in github_secrets:
                         logger.info(f"{GREEN}Replacing SECRET:{secret_name} with actual secret value{RESET}")
                         param["ParameterValue"] = github_secrets[secret_name]
@@ -130,7 +117,7 @@ def main():
                     combined_parameters.append(param)
                 
         except json.JSONDecodeError as e:
-            logger.error(f"{RED}Error parsing inline JSON parameters: {e}{RESET}")
+            logger.error(f"Error parsing inline JSON parameters: {e}")
             logger.error(f"Raw value: {inline_parameters}")
             # Log the error but don't exit if file parameters exist
             if not combined_parameters:
@@ -147,45 +134,100 @@ def main():
             with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                 f.write(f"PARAM_FILE=file:///{param_file}\n")
         except Exception as e:
-            logger.error(f"{RED}Error writing parameter file: {e}{RESET}")
+            logger.error(f"Error writing parameter file: {e}")
             sys.exit(1)
     else:
         logger.info(f"{BLUE}No CFN parameters are available.{RESET}")
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write("PARAM_FILE=\n")
 
-def load_github_secrets():
+
+def load_github_secrets_from_env():
     """
-    Load GitHub secrets from environment variables or file
+    Load GitHub secrets directly from environment variables
     
     Returns:
         dict: Dictionary with secret names as keys and their values
     """
     secrets = {}
     
-    secrets_path = os.environ.get('GITHUB_SECRETS_PATH', '')
-    if secrets_path and os.path.exists(secrets_path):
-        try:
-            with open(secrets_path, 'r') as f:
-                secrets = json.load(f)
-            logger.info(f"{BLUE}Loaded secrets from file: {secrets_path}{RESET}")
-            logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
-            try:
-                os.remove(secrets_path)
-                logger.info(f"{BLUE}Removed secrets file after reading{RESET}")
-            except:
-                pass
-            return secrets
-        except Exception as e:
-            logger.error(f"{RED}Error reading secrets from file: {e}{RESET}")
+    # Спочатку спробуємо отримати секрети з JSON в змінній середовища
+    try:
+        secrets_json = os.environ.get('GITHUB_SECRETS', '{}')
+        secrets = json.loads(secrets_json)
+        logger.info(f"{BLUE}Loaded secrets from GITHUB_SECRETS environment variable{RESET}")
+        logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing GITHUB_SECRETS JSON: {e}")
     
-    # Якщо не вдалося завантажити з файлу, спробуємо з змінних середовища
-    for key, value in os.environ.items():
-        # Include only variables that could be GitHub secrets
-        if not key.startswith('GITHUB_') and not key.startswith('INPUT_'):
-            secrets[key] = value
+    if not secrets:
+        logger.info(f"{YELLOW}No secrets found in GITHUB_SECRETS, using environment variables{RESET}")
+        
+        env_var_count = 0
+        for key, value in os.environ.items():
+            if not key.startswith('GITHUB_') and not key.startswith('INPUT_'):
+                secrets[key] = value
+                env_var_count += 1
+        
+        logger.info(f"{BLUE}Loaded {env_var_count} environment variables as potential secrets{RESET}")
     
-    logger.info(f"{BLUE}Loaded {len(secrets)} potential secrets from environment variables{RESET}")
     return secrets
 
-# [Інші функції залишаються без змін]
+def read_from_s3(s3_path):
+    """
+    Read parameters from an S3 bucket.
+    
+    Args:
+        s3_path (str): The S3 path in the format s3://bucket-name/key
+        
+    Returns:
+        dict or list: The parameters read from the S3 file
+    """
+    try:
+        # Extract bucket and key from S3 path
+        path_parts = s3_path.replace('s3://', '').split('/', 1)
+        bucket = path_parts[0]
+        key = path_parts[1] if len(path_parts) > 1 else ''
+        
+        s3_client = boto3.client('s3')
+        
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        
+        content = response['Body'].read().decode('utf-8')
+    
+        return json.loads(content)
+    except ClientError as e:
+        logger.error(f"Error reading from S3: {e}")
+        return []
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing JSON from S3: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return []
+
+def read_from_local(file_path):
+    """
+    Read parameters from a local file.
+    
+    Args:
+        file_path (str): The path to the local file
+        
+    Returns:
+        dict or list: The parameters read from the local file
+    """
+    try:
+        with open(file_path, 'r') as f:
+            return json.loads(f.read())
+    except FileNotFoundError:
+        logger.error(f"Parameter file not found: {file_path}")
+        return []
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing JSON from file: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return []
+
+if __name__ == "__main__":
+    main()

@@ -92,7 +92,7 @@ jobs:
         run: |
           echo '${{ toJSON(secrets) }}' > /tmp/github_secrets_plaintext.json
           openssl enc -aes-256-cbc -pbkdf2 -iter 10000 -salt -in /tmp/github_secrets_plaintext.json -out /tmp/github_secrets.encrypted -pass pass:${{ secrets.SECRET_SALT_KEY }}
-          rm /tmp/github_secrets_plaintext.json /tmp/encryption_key
+          rm /tmp/github_secrets_plaintext.json
           echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.encrypted" >> $GITHUB_ENV
         
       - name: Deploy Stack

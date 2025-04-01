@@ -118,72 +118,72 @@ jobs:
           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
           SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
          
-    deploy-custom:
-      needs: [prepare-matrices]
-      if: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}
-      runs-on: ${{ matrix.runner }}
-      strategy:
-        matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
-        fail-fast: false
-      environment: ${{ matrix.github_environment }}
+  deploy-custom:
+    needs: [prepare-matrices]
+    if: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
+      fail-fast: false
+    environment: ${{ matrix.github_environment }}
+    
+    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to ${{ matrix.environment }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       
-      name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to ${{ matrix.environment }}
-      
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v4
-        
-        - name: Check prerequisite jobs
-          shell: bash
-          run: |
-            # Отримуємо конфіг файл
-            CONFIG_PATH="${{ matrix.application }}/${{ matrix.resource }}/deployment-config.yaml"
-            if [[ ! -f "$CONFIG_PATH" ]]; then
-              CONFIG_PATH="${{ matrix.application }}/${{ matrix.resource }}/deployment-config.yml"
+      - name: Check prerequisite jobs
+        shell: bash
+        run: |
+          # Отримуємо конфіг файл
+          CONFIG_PATH="${{ matrix.application }}/${{ matrix.resource }}/deployment-config.yaml"
+          if [[ ! -f "$CONFIG_PATH" ]]; then
+            CONFIG_PATH="${{ matrix.application }}/${{ matrix.resource }}/deployment-config.yml"
+          fi
+          
+          # Читаємо значення deploy_after
+          DEPLOY_AFTER=$(yq -r '.deployments[0].parameters.${{ matrix.environment }}.deploy_after // "dev"' $CONFIG_PATH)
+          echo "Need to wait for $DEPLOY_AFTER deployment to complete"
+          
+          # Перевіряємо, чи завершились відповідні задачі
+          if [[ "$DEPLOY_AFTER" == "int" ]]; then
+            WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --jq '.jobs[] | select(.name | test("Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT")) | .status')
+            if [[ "$WORKFLOW_ID" != "completed" ]]; then
+              echo "INT deployment has not completed yet"
+              exit 1
             fi
-            
-            # Читаємо значення deploy_after
-            DEPLOY_AFTER=$(yq -r '.deployments[0].parameters.${{ matrix.environment }}.deploy_after // "dev"' $CONFIG_PATH)
-            echo "Need to wait for $DEPLOY_AFTER deployment to complete"
-            
-            # Перевіряємо, чи завершились відповідні задачі
-            if [[ "$DEPLOY_AFTER" == "int" ]]; then
-              WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --jq '.jobs[] | select(.name | test("Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT")) | .status')
-              if [[ "$WORKFLOW_ID" != "completed" ]]; then
-                echo "INT deployment has not completed yet"
-                exit 1
-              fi
-            elif [[ "$DEPLOY_AFTER" == "prod" ]]; then
-              WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --jq '.jobs[] | select(.name | test("Deploy ${{ matrix.application }}-${{ matrix.resource }} to PROD")) | .status')
-              if [[ "$WORKFLOW_ID" != "completed" ]]; then
-                echo "PROD deployment has not completed yet"
-                exit 1
-              fi
+          elif [[ "$DEPLOY_AFTER" == "prod" ]]; then
+            WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --jq '.jobs[] | select(.name | test("Deploy ${{ matrix.application }}-${{ matrix.resource }} to PROD")) | .status')
+            if [[ "$WORKFLOW_ID" != "completed" ]]; then
+              echo "PROD deployment has not completed yet"
+              exit 1
             fi
-          env:
-            GITHUB_TOKEN: ${{ github.token }}
-        - name: Deploy Stack
-          if: ${{ matrix.deploy_after == 'int' || matrix.deploy_after == 'prod' }}
-          uses: ./.github/actions/composite
-          with:
-            environment: ${{ matrix.environment }}
-            stack-name: ${{ matrix.parameters.stack-name }}
-            bucket-name: ${{ matrix.parameters.bucket-name }}
-            upload-to-s3: ${{ matrix.parameters.bucket-upload }}
-            target-folder: ${{ matrix.parameters.target-folder }}
-            source-folder: ${{ matrix.parameters.source-folder }}
-            template-name: ${{ matrix.parameters.template-name }}
-            filename-patterns: ${{ matrix.parameters.filename-patterns }}
-            cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
-            extraArgs: ${{ matrix.parameters.extraArgs }}          
-            parameter-file: ${{ matrix.parameters.parameter-file }}
-            inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
-            tags: ${{ matrix.parameters.tags }}
-            aws-region: ${{ matrix.aws_region }}
-            aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
-            cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
-            iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
-            SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
+          fi
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Deploy Stack
+        if: ${{ matrix.deploy_after == 'int' || matrix.deploy_after == 'prod' }}
+        uses: ./.github/actions/composite
+        with:
+          environment: ${{ matrix.environment }}
+          stack-name: ${{ matrix.parameters.stack-name }}
+          bucket-name: ${{ matrix.parameters.bucket-name }}
+          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+          target-folder: ${{ matrix.parameters.target-folder }}
+          source-folder: ${{ matrix.parameters.source-folder }}
+          template-name: ${{ matrix.parameters.template-name }}
+          filename-patterns: ${{ matrix.parameters.filename-patterns }}
+          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+          extraArgs: ${{ matrix.parameters.extraArgs }}          
+          parameter-file: ${{ matrix.parameters.parameter-file }}
+          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+          tags: ${{ matrix.parameters.tags }}
+          aws-region: ${{ matrix.aws_region }}
+          aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+          cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
+          iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
+          SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
 
   deploy-int:
     needs: [prepare-matrices, deploy-dev]

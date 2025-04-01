@@ -158,18 +158,16 @@ def load_github_secrets():
     
     if secrets_path and os.path.exists(secrets_path):
         try:
-            # Створюємо ключ розшифрування із сіль-ключа
             import hashlib
             import subprocess
             
             # Створюємо такий самий ключ, як при шифруванні
             key = hashlib.sha256(salt_key.encode()).hexdigest()
             
-            # Використовуємо OpenSSL для розшифрування (так само, як шифрували)
             try:
-                # Розшифровуємо файл за допомогою openssl
+                # Розшифровуємо файл за допомогою openssl з тими ж параметрами, що й при шифруванні
                 result = subprocess.run(
-                    ['openssl', 'enc', '-d', '-aes-256-cbc', '-salt', 
+                    ['openssl', 'enc', '-d', '-aes-256-cbc', '-pbkdf2', '-iter', '10000', '-salt', 
                      '-in', secrets_path, 
                      '-pass', f'pass:{key}'],
                     capture_output=True, text=True, check=True
@@ -209,7 +207,6 @@ def load_github_secrets():
         logger.info(f"{BLUE}Loaded {env_var_count} environment variables as potential secrets{RESET}")
     
     return secrets
-
 def read_from_s3(s3_path):
     """
     Read parameters from an S3 bucket.

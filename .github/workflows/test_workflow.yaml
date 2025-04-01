@@ -1,14 +1,14 @@
-name: CD-EM-RCC-InfraWorkflow
+name: CD-EM-RCC-InfraWorkflow-test1
 
 permissions:
   id-token: write
   contents: write
 
 on:
-  push:
-    branches: [main]   
-  pull_request:
-    branches: [develop]
+  # push:
+  #   branches: [main]   
+  # pull_request:
+  #   branches: [develop]
   workflow_dispatch:
 
 

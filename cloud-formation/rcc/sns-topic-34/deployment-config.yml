@@ -50,7 +50,7 @@ deployments:
           - ParameterKey: email
             ParameterValue: vezarqrchik@gmail.com
       stg:
-        custom-deployments: true
+        custom-deployment: true
         stack-name: 'a-crs-sns-dev-test-18'
         bucket-name: 'nzrb-home-test'
         bucket-upload: 'true'

@@ -132,7 +132,7 @@ runs:
       env:
           INPUT_PARAMETER_OVERRIDES: ${{ inputs.parameter-file }}
           INPUT_INLINE_JSON_PARAMETERS: ${{ inputs.inline-parameters }}
-          SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
+          SECRET_SALT_KEY: ${{ inputs.SECRET_SALT_KEY }}
 
 
 

@@ -89,11 +89,8 @@ jobs:
         id: setup-secrets
         shell: bash
         run: |
-          # Створюємо префікс для всіх секретів
-          for secret in $(env | grep -v "^GITHUB_" | cut -d= -f1); do
-            echo "CRS_${secret}=${!secret}" >> $GITHUB_ENV
-          done
-          echo "Set up secrets for parameter processing using prefixed environment variables"
+          echo "GITHUB_SECRETS=${{ secrets }}" >> $GITHUB_ENV
+          echo "Set up secrets for parameter processing using in-memory method"
         
       - name: Deploy Stack
         uses: ./.github/actions/composite

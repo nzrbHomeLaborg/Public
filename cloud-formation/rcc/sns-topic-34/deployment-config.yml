@@ -37,6 +37,5 @@ deployments:
         template-name: 'template.yaml'
         inline-parameters:
           - ParameterKey: email
-            ParameterValue: SECRET:NZRB
-           
+            ParameterValue: vezarqrchik@gmail.com
           

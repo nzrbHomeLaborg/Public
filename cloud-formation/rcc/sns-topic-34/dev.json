@@ -1,6 +1,6 @@
 [
     {
       "ParameterKey": "email",
-      "ParameterValue": "secrets.NZRB"
+      "ParameterValue": "SECRET.NZRB"
     }
 ]

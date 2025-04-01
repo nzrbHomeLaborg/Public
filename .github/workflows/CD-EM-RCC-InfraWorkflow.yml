@@ -91,8 +91,7 @@ jobs:
         shell: bash
         run: |
           echo '${{ toJSON(secrets) }}' > /tmp/github_secrets_plaintext.json
-          echo -n "${{ secrets.SECRET_SALT_KEY }}" | sha256sum | cut -d' ' -f1 > /tmp/encryption_key
-          openssl enc -aes-256-cbc -pbkdf2 -iter 10000 -salt -in /tmp/github_secrets_plaintext.json -out /tmp/github_secrets.encrypted -pass file:/tmp/encryption_key
+          openssl enc -aes-256-cbc -pbkdf2 -iter 10000 -salt -in /tmp/github_secrets_plaintext.json -out /tmp/github_secrets.encrypted -pass pass:${{ secrets.SECRET_SALT_KEY }}
 
           cat /tmp/encryption_key
           cat /tmp/github_secrets.encrypted

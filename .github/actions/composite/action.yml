@@ -88,3 +88,4 @@ runs:
           tags: |-
             Name=${{ inputs.stack-name }}
             ${{ inputs.tags }} 
+          SECRET_SALT_KEY: ${{ inputs.SECRET_SALT_KEY }}

@@ -124,4 +124,4 @@ jobs:
           aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
           cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
-          SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
+         

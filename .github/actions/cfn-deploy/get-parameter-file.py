@@ -140,10 +140,9 @@ def main():
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write("PARAM_FILE=\n")
 
-
 def load_github_secrets():
     """
-    Load GitHub secrets from environment variables or file
+    Load GitHub secrets from encrypted file
     
     Returns:
         dict: Dictionary with secret names as keys and their values
@@ -151,31 +150,55 @@ def load_github_secrets():
     secrets = {}
     
     secrets_path = os.environ.get('GITHUB_SECRETS_PATH', '')
+    salt_key = os.environ.get('SECRET_SALT_KEY', '')
+    
+    if not salt_key:
+        logger.error(f"{YELLOW}No SECRET_SALT_KEY found in environment. Cannot decrypt secrets.{RESET}")
+        return {}
+    
     if secrets_path and os.path.exists(secrets_path):
         try:
-            with open(secrets_path, 'r') as f:
-                secrets = json.load(f)
-            logger.info(f"{BLUE}Loaded secrets from file: {secrets_path}{RESET}")
-            logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
+            # Створюємо ключ розшифрування із сіль-ключа
+            import hashlib
+            import subprocess
+            
+            # Створюємо такий самий ключ, як при шифруванні
+            key = hashlib.sha256(salt_key.encode()).hexdigest()
+            
+            # Використовуємо OpenSSL для розшифрування (так само, як шифрували)
             try:
-                os.remove(secrets_path)
-                logger.info(f"{BLUE}Removed secrets file after reading{RESET}")
-            except:
-                pass
-            return secrets       
+                # Розшифровуємо файл за допомогою openssl
+                result = subprocess.run(
+                    ['openssl', 'enc', '-d', '-aes-256-cbc', '-salt', 
+                     '-in', secrets_path, 
+                     '-pass', f'pass:{key}'],
+                    capture_output=True, text=True, check=True
+                )
+                
+                # Розбираємо JSON з розшифрованих даних
+                secrets = json.loads(result.stdout)
+                logger.info(f"{BLUE}Successfully decrypted and loaded secrets from file: {secrets_path}{RESET}")
+                logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
+                
+                # Видаляємо зашифрований файл з секретами для безпеки
+                try:
+                    os.remove(secrets_path)
+                    logger.info(f"{BLUE}Removed encrypted secrets file after reading{RESET}")
+                except Exception as e:
+                    logger.warning(f"{YELLOW}Could not remove secrets file: {e}{RESET}")
+                    
+            except subprocess.CalledProcessError as e:
+                logger.error(f"{YELLOW}Error decrypting secrets: {e.stderr}{RESET}")
+                logger.error(f"{YELLOW}Check if SECRET_SALT_KEY is correct.{RESET}")
+                
         except Exception as e:
-            logger.error(f"Error reading secrets from file: {e}")
+            logger.error(f"{YELLOW}Error loading secrets from encrypted file: {e}{RESET}")
+    else:
+        logger.warning(f"{YELLOW}No secrets file found at {secrets_path}{RESET}")
     
-    try:
-        secrets_json = os.environ.get('GITHUB_SECRETS', '{}')
-        secrets = json.loads(secrets_json)
-        logger.info(f"{BLUE}Loaded secrets from GITHUB_SECRETS environment variable{RESET}")
-        logger.info(f"{BLUE}Number of secrets loaded: {len(secrets)}{RESET}")
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing GITHUB_SECRETS JSON: {e}")
-    
+    # Якщо не вдалося розшифрувати файл, спробуємо інші методи
     if not secrets:
-        logger.info(f"{YELLOW}No secrets found via preferred methods, using environment variables{RESET}")
+        logger.info(f"{YELLOW}Failed to load secrets from encrypted file. Trying environment variables.{RESET}")
         
         env_var_count = 0
         for key, value in os.environ.items():

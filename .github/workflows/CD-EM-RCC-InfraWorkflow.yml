@@ -155,7 +155,7 @@ jobs:
           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
           SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
 
- deploy-int:
+  deploy-int:
     needs: [prepare-matrices, deploy-dev]
     if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
     runs-on: custom

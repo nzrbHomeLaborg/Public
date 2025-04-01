@@ -120,28 +120,28 @@ runs:
       run: pip install --user boto3
       shell: bash
     # Configure AWS credentials with OIDC
-    # - name: Get parameter files
-    #   id: get-param-file
-    #   run: |
-    #       chmod a+x $GITHUB_ACTION_PATH/get-parameter-file.py
-    #       $GITHUB_ACTION_PATH/get-parameter-file.py
-    #   shell: bash
-    #   env:
-    #       INPUT_PARAMETER_OVERRIDES: ${{ inputs.parameter-file }}
-    #       INPUT_INLINE_JSON_PARAMETERS: ${{ inputs.inline-parameters }}
-
-
-
-
     - name: Get parameter files
       id: get-param-file
       run: |
-          chmod a+x $GITHUB_ACTION_PATH/get-parameter-file.sh
-          $GITHUB_ACTION_PATH/get-parameter-file.sh
+          chmod a+x $GITHUB_ACTION_PATH/get-parameter-file.py
+          $GITHUB_ACTION_PATH/get-parameter-file.py
       shell: bash
       env:
           INPUT_PARAMETER_OVERRIDES: ${{ inputs.parameter-file }}
           INPUT_INLINE_JSON_PARAMETERS: ${{ inputs.inline-parameters }}
+
+
+
+
+    # - name: Get parameter files
+    #   id: get-param-file
+    #   run: |
+    #       chmod a+x $GITHUB_ACTION_PATH/get-parameter-file.sh
+    #       $GITHUB_ACTION_PATH/get-parameter-file.sh
+    #   shell: bash
+    #   env:
+    #       INPUT_PARAMETER_OVERRIDES: ${{ inputs.parameter-file }}
+    #       INPUT_INLINE_JSON_PARAMETERS: ${{ inputs.inline-parameters }}
 
     # Cloudformation deployment
     - name: AWS Cloudformation Deploy

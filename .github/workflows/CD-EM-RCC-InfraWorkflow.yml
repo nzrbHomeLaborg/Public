@@ -122,7 +122,8 @@ jobs:
   deploy-custom:
     needs: 
       - prepare-matrices
-      - ${{ matrix.needs }}
+      - ${{ fromJSON(readFile(format('.github/deployment/{0}.yml', matrix.environment))).needs }}
+
     if: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}
     runs-on: ${{ matrix.runner }}
     strategy:

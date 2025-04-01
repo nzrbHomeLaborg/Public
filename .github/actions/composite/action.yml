@@ -53,6 +53,9 @@ inputs:
     description: 'Whether to upload templates to S3 bucket'
     required: false
     default: 'true'
+  SECRET_SALT_KEY:
+    description: 'Salt key for encrypting/decrypting secrets'
+    required: true    
 
 runs:
   using: "composite"

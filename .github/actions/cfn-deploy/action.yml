@@ -60,6 +60,9 @@ inputs:
   aws-region:
     description: AWS region to connect and deploy the resource. It is required if iam-execution-role-arn is passed.
     required: false
+  SECRET_SALT_KEY:
+    description: 'Salt key for encrypting/decrypting secrets'
+    required: true    
 outputs:
   stack-id:
     description: "The id of the deployed stack. In addition, any outputs declared in the deployed CloudFormation stack will also be set as outputs for the action, e.g. if the stack has a stack output named 'foo', this action will also have an output named 'foo'."

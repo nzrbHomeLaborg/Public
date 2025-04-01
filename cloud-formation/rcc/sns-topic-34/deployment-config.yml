@@ -35,5 +35,8 @@ deployments:
         source-folder: cloud-formation/rcc/sns-topic-34
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
-        parameter-file: cloud-formation/rcc/sns-topic-34/dev.json 
+        inline-parameters:
+          - ParameterKey: email
+            ParameterValue: SECRET:NZRB
+           
           

@@ -55,26 +55,30 @@ if [ -n "$INPUT_FILE" ] && [ -n "$OUTPUT_FILE" ]; then
   # Get all secrets from environment
   ALL_SECRETS=$(env | grep "^SECRETS_" | cut -d= -f1)
   
-  # Replace each secret
-  for SECRET_VAR in $ALL_SECRETS; do
-    # Get the actual secret name without the SECRETS_ prefix
-    SECRET_NAME=${SECRET_VAR#SECRETS_}
-    
-    # Get the secret value (mask it in logs)
-    SECRET_VALUE=${!SECRET_VAR}
-    MASKED_VALUE="****"
-    
-    echo "DEBUG: Looking for \"secrets.${SECRET_NAME}\" pattern in parameter file"
-    MATCHES=$(grep -c "secrets.${SECRET_NAME}" "$OUTPUT_FILE" || echo "0")
-    echo "DEBUG: Found $MATCHES occurrences"
-    
-    # Replace the secret placeholder
-    sed -i "s/\"secrets.${SECRET_NAME}\"/\"${SECRET_VALUE}\"/g" "$OUTPUT_FILE"
-    
-    # Verify replacement
-    REMAINING=$(grep -c "secrets.${SECRET_NAME}" "$OUTPUT_FILE" || echo "0")
-    echo "DEBUG: After replacement, $REMAINING occurrences remain"
-  done
+  if [ -z "$ALL_SECRETS" ]; then
+    echo "WARNING: No secrets found in environment. No replacements will be made."
+  else
+    # Replace each secret
+    for SECRET_VAR in $ALL_SECRETS; do
+      # Get the actual secret name without the SECRETS_ prefix
+      SECRET_NAME=${SECRET_VAR#SECRETS_}
+      
+      # Get the secret value (mask it in logs)
+      SECRET_VALUE=${!SECRET_VAR}
+      MASKED_VALUE="****"
+      
+      echo "DEBUG: Looking for \"secrets.${SECRET_NAME}\" pattern in parameter file"
+      MATCHES=$(grep -c "secrets.${SECRET_NAME}" "$OUTPUT_FILE" || echo "0")
+      echo "DEBUG: Found $MATCHES occurrences"
+      
+      # Replace the secret placeholder
+      sed -i "s/\"secrets.${SECRET_NAME}\"/\"${SECRET_VALUE}\"/g" "$OUTPUT_FILE"
+      
+      # Verify replacement
+      REMAINING=$(grep -c "secrets.${SECRET_NAME}" "$OUTPUT_FILE" || echo "0")
+      echo "DEBUG: After replacement, $REMAINING occurrences remain"
+    done
+  fi
   
   echo "Parameters file processed: $OUTPUT_FILE"
 fi
@@ -91,3 +95,5 @@ else
 fi
 
 echo "DEBUG: Script completed"
+# Exit with success regardless of replacements
+exit 0

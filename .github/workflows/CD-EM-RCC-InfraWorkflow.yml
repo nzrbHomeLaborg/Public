@@ -135,7 +135,7 @@ jobs:
         
       - name: Deploy Stack
         if: ${{ matrix.deploy_after == 'int' || matrix.deploy_after == 'prod' }}
-        uses: cat-digital-platform/CD-GitHub-Actions/aws-cfn-lint-upload-create-update-composite@nazar/1853441/eqm-compose-actions
+        uses: ./.github/actions/composite
         with:
           environment: ${{ matrix.environment }}
           stack-name: ${{ matrix.parameters.stack-name }}
@@ -173,7 +173,7 @@ jobs:
       
       
       - name: Deploy Stack
-        uses: ./.github/actions/deploy-stack
+        uses: ./.github/actions/composite
         with:
           environment: ${{ matrix.environment }}
           stack-name: ${{ matrix.parameters.stack-name }}
@@ -216,7 +216,7 @@ jobs:
           aws-region: ${{ matrix.aws_region }}
       
       - name: Deploy Stack
-        uses: ./.github/actions/deploy-stack
+        uses: ./.github/actions/composite
         with:
           environment: ${{ matrix.environment }}
           stack-name: ${{ matrix.parameters.stack-name }}

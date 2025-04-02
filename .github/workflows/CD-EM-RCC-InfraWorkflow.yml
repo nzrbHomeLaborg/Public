@@ -83,7 +83,7 @@ jobs:
           echo "::notice title=Deployment ID::${GITHUB_RUN_ID}-${{ matrix.environment }}"
   update-run-name:
     needs: detect-changes
-    runs-on: custom
+    runs-on: ubuntu-latest
     steps:
       - name: Update workflow name
         if: ${{ needs.detect-changes.outputs.resource_paths != '' }}

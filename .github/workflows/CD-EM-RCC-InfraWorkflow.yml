@@ -1,5 +1,12 @@
 name: CD-EM-RCC-InfraWorkflow
-run-name: Deploy ${{ github.event.push.paths || 'Auto' }} to ${{ github.event.inputs.environment || 'All Envs' }} [${{ github.run_id }}]
+run-name: |
+  ${{ github.event_name == 'workflow_dispatch' && 
+      format('Deploy %s to %s', github.event.inputs.resource_path, github.event.inputs.environment || 'All Envs') ||
+      github.event_name == 'pull_request' && 
+      format('PR #%s: %s', github.event.pull_request.number, github.event.pull_request.title) ||
+      format('Push to %s', github.ref_name) 
+  }}
+
 
 permissions:
   id-token: write

@@ -119,7 +119,7 @@ jobs:
           SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
          
   deploy-custom:
-    needs: [prepare-matrices]
+    needs: [prepare-matrices, deploy-dev]
     if: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}
     runs-on: ${{ matrix.runner }}
     strategy:

@@ -85,17 +85,16 @@ jobs:
     needs: detect-changes
     runs-on: custom
     steps:
-      - name: Update run name
+      - name: Update workflow name
         if: ${{ needs.detect-changes.outputs.resource_paths != '' }}
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.actions.updateWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-              name: `Push to ${context.ref} - Changed: ${context.payload.repository.full_name}/${{ needs.detect-changes.outputs.resource_paths }}`
-            })          
+        shell: bash
+        run: |
+          echo "PATHS=${{ needs.detect-changes.outputs.resource_paths }}"
+          echo "Adding paths information to workflow run description"
+          gh api --method PATCH /repos/${{ github.repository }}/actions/runs/${{ github.run_id }} \
+            -f name="Push to ${{ github.ref_name }} - Resources: ${{ needs.detect-changes.outputs.resource_paths }}"
+        env:
+          GH_TOKEN: ${{ github.token }}        
   deploy-dev:
     needs: prepare-matrices
     if: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null }}

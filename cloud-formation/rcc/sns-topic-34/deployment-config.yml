@@ -48,7 +48,7 @@ deployments:
         stack-name: 'a-crs-sns-dev-test-24'
         bucket-name: 'nzrb-home-test'
         bucket-upload: 'true'
-        target-folder: cloud-formation/rcc/sns-topic-34
+        target-folder: cloud-formation/rcc/sns-topic-34123
         source-folder: cloud-formation/rcc/sns-topic-34   
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'

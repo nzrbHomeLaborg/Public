@@ -102,7 +102,7 @@ runs:
               echo "Multiple environments selected: ${SELECTED_ENVS[*]}"
               
               # Create regex pattern for matching
-              SELECTED_ENVS_LIST=$(printf "|%s" "${SELECTED_ENVS[@]}")
+              SELECTED_ENVS_LIST=$(printf "|%s" "${SELECTED_ENVS[@]}" | tr -d ' ')
               SELECTED_ENVS_LIST=${SELECTED_ENVS_LIST:1}
               echo "Environment regex pattern: ^($SELECTED_ENVS_LIST)$"
               

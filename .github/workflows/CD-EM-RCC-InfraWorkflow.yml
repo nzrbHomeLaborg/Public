@@ -44,7 +44,10 @@ jobs:
           pull_request_number: ${{ github.event.pull_request.number || '' }}
           resource_path_input: ${{ github.event.inputs.resource_path || '' }}
           repository: ${{ github.repository }}
-      
+      - name: Set job identifier
+        run: |
+          echo "JOB_ID=${GITHUB_RUN_ID}-${GITHUB_RUN_NUMBER}-${{ matrix.environment }}" >> $GITHUB_ENV
+          echo "::notice title=Deployment ID::${GITHUB_RUN_ID}-${{ matrix.environment }}"      
       - name: Show detected paths
         shell: bash
         run: |
@@ -70,7 +73,10 @@ jobs:
         with:
           resource_paths: ${{ needs.detect-changes.outputs.resource_paths }}
           specific_environment: ${{ needs.detect-changes.outputs.specific_environment }}
-
+      - name: Set job identifier
+        run: |
+          echo "JOB_ID=${GITHUB_RUN_ID}-${GITHUB_RUN_NUMBER}-${{ matrix.environment }}" >> $GITHUB_ENV
+          echo "::notice title=Deployment ID::${GITHUB_RUN_ID}-${{ matrix.environment }}"
   deploy-dev:
     needs: prepare-matrices
     if: ${{ fromJSON(needs.prepare-matrices.outputs.dev_matrix).include[0] != null }}
@@ -117,7 +123,10 @@ jobs:
           cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
           iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
           SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
-         
+      - name: Set job identifier
+        run: |
+          echo "JOB_ID=${GITHUB_RUN_ID}-${GITHUB_RUN_NUMBER}-${{ matrix.environment }}" >> $GITHUB_ENV
+          echo "::notice title=Deployment ID::${GITHUB_RUN_ID}-${{ matrix.environment }}"         
   deploy-custom:
     needs: prepare-matrices
     if: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}

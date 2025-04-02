@@ -94,13 +94,42 @@ runs:
           
           echo "Found environments: $ENVIRONMENTS"
           
-          # Filter by specific environment if provided
+          # Filter by specific environment(s) if provided
           if [[ "${{ inputs.specific_environment }}" != "" ]]; then
-            if echo "$ENVIRONMENTS" | grep -q "${{ inputs.specific_environment }}"; then
-              ENVIRONMENTS="${{ inputs.specific_environment }}"
+            if [[ "${{ inputs.specific_environment }}" == *","* ]]; then
+              # Multiple environments specified
+              IFS=',' read -ra SELECTED_ENVS <<< "${{ inputs.specific_environment }}"
+              echo "Multiple environments selected: ${SELECTED_ENVS[*]}"
+              
+              # Create regex pattern for matching
+              SELECTED_ENVS_LIST=$(printf "|%s" "${SELECTED_ENVS[@]}")
+              SELECTED_ENVS_LIST=${SELECTED_ENVS_LIST:1}
+              echo "Environment regex pattern: ^($SELECTED_ENVS_LIST)$"
+              
+              # Filter environments
+              FILTERED_ENVIRONMENTS=""
+              for ENV_CANDIDATE in $ENVIRONMENTS; do
+                if echo "$ENV_CANDIDATE" | grep -qE "^($SELECTED_ENVS_LIST)$"; then
+                  FILTERED_ENVIRONMENTS+=" $ENV_CANDIDATE"
+                  echo "Selected environment: $ENV_CANDIDATE"
+                fi
+              done
+              
+              if [[ -z "$FILTERED_ENVIRONMENTS" ]]; then
+                echo "::warning::None of the specified environments found in $CONFIG_PATH"
+                continue
+              fi
+              
+              ENVIRONMENTS="$FILTERED_ENVIRONMENTS"
+              echo "Filtered environments: $ENVIRONMENTS"
             else
-              echo "::warning::Specified environment not found in $CONFIG_PATH"
-              continue
+              # Single environment specified
+              if echo "$ENVIRONMENTS" | grep -q "${{ inputs.specific_environment }}"; then
+                ENVIRONMENTS="${{ inputs.specific_environment }}"
+              else
+                echo "::warning::Specified environment not found in $CONFIG_PATH"
+                continue
+              fi
             fi
           fi
           

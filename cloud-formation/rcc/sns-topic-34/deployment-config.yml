@@ -77,7 +77,7 @@ deployments:
         bucket-name: 'nzrb-home-test'
         bucket-upload: 'true'
         target-folder: cloud-formation/rcc/sns-topic-34
-        source-folder: cloud-formation/rcc/sns-topic-34
+        source-folder: cloud-formation/rcc/sns-topic
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
         inline-parameters:

@@ -8,9 +8,7 @@ permissions:
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "*"   
+    branches: [main]  
   pull_request:
     branches: [main]
   workflow_dispatch:

@@ -54,7 +54,7 @@ deployments:
         template-name: 'template.yaml'
         inline-parameters:
           - ParameterKey: email
-            ParameterValue: vezarqrchik@gmail.com
+            ParameterValue: vezarqrchik@gmail.com 
       # stg:
       #   custom_deployment: true
       #   deploy_after: "int"
@@ -70,7 +70,7 @@ deployments:
       #       ParameterValue: A-topic-1
       #     - ParameterKey: email
       #       ParameterValue: vezarqrchik@gmail.com 
-      # qa:
+      # qa: 
       #   custom_deployment: true
       #   deploy_after: "int"
       #   stack-name: 'a-crs-sns-dev-test-18'

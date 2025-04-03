@@ -54,7 +54,33 @@ runs:
         # For workflow_dispatch events
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           log "Workflow dispatch event detected."
-          echo "paths=${{ github.event.inputs.resource_path }}" >> $GITHUB_OUTPUT
+          
+          # Extract the resource path from the input
+          RESOURCE_PATH="${{ github.event.inputs.resource_path }}"
+          log "Requested resource path: $RESOURCE_PATH"
+          
+          # Extract the base application name from the resource path
+          # This assumes the resource path format is like "cloud-formation/nzrb/something"
+          BASE_APP_NAME=$(echo "$RESOURCE_PATH" | awk -F'/' '{print $2}')
+          log "Base application name from path: $BASE_APP_NAME"
+          
+          # Get the configured applications_path
+          CONFIGURED_APP="${{ inputs.applications_path }}"
+          log "Configured applications_path: $CONFIGURED_APP"
+          
+          # Validate that the requested resource belongs to the configured application
+          if [[ "$BASE_APP_NAME" == "$CONFIGURED_APP" ]]; then
+            log "Resource path validation passed."
+            echo "paths=$RESOURCE_PATH" >> $GITHUB_OUTPUT
+          elif [[ -z "$BASE_APP_NAME" ]] || [[ -z "$CONFIGURED_APP" ]]; then
+            log "WARNING: Empty base app name or configured app. Proceeding with caution."
+            echo "paths=$RESOURCE_PATH" >> $GITHUB_OUTPUT
+          else
+            log "ERROR: Resource path validation failed. The resource '$RESOURCE_PATH' (app: '$BASE_APP_NAME') does not match the configured application '$CONFIGURED_APP'."
+            log "This workflow is configured for '$CONFIGURED_APP' resources only."
+            echo "paths=" >> $GITHUB_OUTPUT  # Empty output means no paths to process
+          fi
+          
           exit 0
         fi
         
@@ -138,13 +164,28 @@ runs:
         
           # Check if the file is a deployment config file
           # Using pattern matching and avoiding direct insertion of GitHub variables in conditionals
-          if [[ "$file" == cloud-formation/${APPS_PATH}/*deployment-config.y*ml ]]; then
+          # We need to ensure we're matching the exact application path, not just a prefix
+          # For example, we want to match 'cloud-formation/nzrb/' but not 'cloud-formation/nzrb2/'
+          
+          # Extract directory components for more precise matching
+          FILE_DIR=$(dirname "$file")
+          APP_DIR_PATTERN="cloud-formation/${APPS_PATH}"
+          
+          # Check if file matches our deployment config pattern
+          if [[ "$file" == *deployment-config.y*ml && "$FILE_DIR" == ${APP_DIR_PATTERN}/* ]]; then
+            # Extra validation to ensure we're not matching similar-named but different apps
+            FILE_APP=$(echo "$FILE_DIR" | awk -F'/' '{print $2}')
+            
+            if [[ "$FILE_APP" == "$APPS_PATH" ]]; then
             RESOURCE_PATH=$(dirname "$file")
             log "Match found! File: $file, Resource path: $RESOURCE_PATH"
         
-            # Check if this path is already in our array
-            if [[ ! " ${CHANGED_PATHS[*]} " =~ " ${RESOURCE_PATH} " ]]; then
-              CHANGED_PATHS+=("$RESOURCE_PATH")
+              # Check if this path is already in our array
+              if [[ ! " ${CHANGED_PATHS[*]} " =~ " ${RESOURCE_PATH} " ]]; then
+                CHANGED_PATHS+=("$RESOURCE_PATH")
+              fi
+            else
+              log "Skipping file '$file' - app name '$FILE_APP' doesn't match configured app '$APPS_PATH'"
             fi
           fi
         done <<< "$CHANGED_FILES"

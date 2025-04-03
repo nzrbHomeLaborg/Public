@@ -300,7 +300,7 @@ def process_parameters_command(args):
             logger.error(f"{RED}Failed to write processed parameters: {e}{RESET}")
             sys.exit(1)
     else:
-        # Print processed parameters to stdout (as JSON)
+        # Print processed parameters to stdout (as JSON)2131231
         print(json.dumps(processed_parameters))
 
 def main():

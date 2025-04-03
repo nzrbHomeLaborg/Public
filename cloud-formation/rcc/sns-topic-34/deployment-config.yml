@@ -1,5 +1,5 @@
 deployments:
-  - resource: a-crs-ecc-sns
+  - resource: a-crs-ecc-sns-test
     environments:
       - dev
       - int
@@ -61,7 +61,7 @@ deployments:
         stack-name: 'a-crs-sns-dev-test-18'
         bucket-name: 'nzrb-home-test'
         bucket-upload: 'true'
-        target-folder: cloud-formation/rcc/sns-topic-34.  
+        target-folder: cloud-formation/rcc/sns-topic-34
         source-folder: cloud-formation/rcc/sns-topic-34
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
@@ -77,7 +77,7 @@ deployments:
         bucket-name: 'nzrb-home-test'
         bucket-upload: 'true'
         target-folder: cloud-formation/rcc/sns-topic-34
-        source-folder: cloud-formation/rcc/sns-topic-34
+        source-folder: cloud-formation/rcc/sns-topic
         # filename-patterns: "*.yaml"
         template-name: 'template.yaml'
         inline-parameters:

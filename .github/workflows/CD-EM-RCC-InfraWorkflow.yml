@@ -214,8 +214,11 @@ jobs:
           SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
 
   deploy-int:
-    needs: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["prepare-matrices"]') || fromJSON('["prepare-matrices", "deploy-int"]') }}
-    if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
+    needs: [prepare-matrices, deploy-dev]
+    if: |
+      always() && 
+      needs.prepare-matrices.result == 'success' && 
+      (github.event_name == 'workflow_dispatch' || needs.deploy-int.result == 'success')
     runs-on: custom
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}

@@ -1,0 +1,99 @@
+deployments:
+  - resource: a-crs-ecc-sns-test
+    environments:
+      - dev
+      - int
+      - stg
+      - qa 
+    runners:
+      dev: custom
+      int: custom
+      stg: custom
+      qa: custom
+    github_environments:
+      dev: CD-EM-CRS-DEV
+      int: CD-EM-CRS-DEV
+      stg: CD-EM-CRS-DEV
+      qa: CD-EM-CRS-DEV
+    aws_regions:
+      dev: us-east-1
+      int: us-east-1
+      stg: us-east-1
+      qa: us-east-1
+    aws_role_secrets:
+      dev: AWS_ROLE_TO_ASSUME
+      int: AWS_ROLE_TO_ASSUME
+      stg: AWS_ROLE_TO_ASSUME
+      qa: AWS_ROLE_TO_ASSUME
+    cfn_role_secrets:
+      dev: CFN_ROLE_ARN
+      int: CFN_ROLE_ARN
+      stg: CFN_ROLE_ARN
+    iam_execution_role_secrets:
+      dev: IAM_EXECUTION_ROLE_ARN
+      int: IAM_EXECUTION_ROLE_ARN
+      stg: IAM_EXECUTION_ROLE_ARN
+      qa: IAM_EXECUTION_ROLE_ARN
+    github_vars:
+      dev:
+        tags: A_CRS_TAGS
+      int: 
+        tags: A_CRS_TAGS  
+      stg:
+        tags: A_CRS_TAGS  213123
+        tags: A_CRS_TAGS  
+    parameters:
+      dev:
+        stack-name: 'a-crs-sns-dev-test-24'
+        bucket-name: 'nzrb-home-test'
+        bucket-upload: 'true'
+        target-folder: cloud-formation/rcc/sns-topic-1
+        source-folder: cloud-formation/rcc/sns-topic-34123
+        # filename-patterns: "*.yaml"
+        template-name: 'template.yaml'
+        inline-parameters:
+          - ParameterKey: email
+            ParameterValue: vezarqrchik@gmail.com
+      stg:
+        custom_deployment: true
+        deploy_after: "int"
+        stack-name: 'a-crs-sns-dev-test-18'
+        bucket-name: 'nzrb-home-test'
+        bucket-upload: 'true'
+        target-folder: cloud-formation/rcc/sns-topic-34
+        source-folder: cloud-formation/rcc/sns-topic-34
+        # filename-patterns: "*.yaml"
+        template-name: 'template.yaml'
+        inline-parameters:
+          - ParameterKey: TopicName
+            ParameterValue: A-topic-1
+          - ParameterKey: email
+            ParameterValue: vezarqrchik@gmail.com 
+      qa:
+        custom_deployment: true
+        deploy_after: "int"
+        stack-name: 'a-crs-sns-dev-test-18'
+        bucket-name: 'nzrb-home-test'
+        bucket-upload: 'true'
+        target-folder: cloud-formation/rcc/sns-topic-34
+        source-folder: cloud-formation/rcc/sns-topic
+        # filename-patterns: "*.yaml"
+        template-name: 'template.yaml'
+        inline-parameters:
+          - ParameterKey: TopicName
+            ParameterValue: A-topic-1
+          - ParameterKey: email
+            ParameterValue: vezarqrchik@gmail.com             
+      int:
+        stack-name: 'a-crs-sns-dev-test-24' 
+        bucket-name: 'nzrb-home-test'
+        bucket-upload: 'true'
+        target-folder: cloud-formation/rcc/sns-topic-34
+        source-folder: cloud-formation/rcc/sns-topic-34
+        # filename-patterns: "*.yaml"
+        template-name: 'template.yaml'
+        inline-parameters:
+          - ParameterKey: TopicName
+            ParameterValue: A-topic-2
+          - ParameterKey: email
+            ParameterValue: vezarqrchik@gmail.com            

@@ -26,7 +26,7 @@ Resources:
               - DELETE
               - HEAD
             MaxAge: 3000
-
+  
 Outputs:
   S3BucketName:
     Description: 'Bucket name'

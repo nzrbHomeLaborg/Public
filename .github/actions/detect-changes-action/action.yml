@@ -30,7 +30,7 @@ inputs:
     required: true
   applications_path: 
     description: 'Resource path provided via auto run'
-    required: true
+    required: false
     default: ''    
 outputs:
   paths:
@@ -133,7 +133,7 @@ runs:
           fi
         
           # Check if the file is a deployment config file
-          if [[ "$file" == ${{ inputs.applications_path }} ]]; then
+          if [[ "$file" == cloud-formation/${{ inputs.applications_path }}/*deployment-config.y*ml ]]; then
             RESOURCE_PATH=$(dirname "$file")
             log "Match found! File: $file, Resource path: $RESOURCE_PATH"
         

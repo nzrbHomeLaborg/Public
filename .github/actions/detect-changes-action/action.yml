@@ -61,6 +61,10 @@ runs:
         CHANGED_PATHS=()
         CHANGED_FILES=""
         
+        # Store applications_path in a variable to avoid issues with special characters
+        APPS_PATH="${{ inputs.applications_path }}"
+        log "Applications path: $APPS_PATH"
+        
         # Determine event type and get changed files
         EVENT_NAME="${{ github.event_name }}"
         log "Event name: $EVENT_NAME"
@@ -133,11 +137,13 @@ runs:
           fi
         
           # Check if the file is a deployment config file
-          if [[ "$file" == cloud-formation/${{ inputs.applications_path }}/*deployment-config.y*ml ]]; then
+          # Using pattern matching and avoiding direct insertion of GitHub variables in conditionals
+          if [[ "$file" == cloud-formation/${APPS_PATH}/*deployment-config.y*ml ]]; then
             RESOURCE_PATH=$(dirname "$file")
             log "Match found! File: $file, Resource path: $RESOURCE_PATH"
         
-            if [[ ! " ${CHANGED_PATHS[@]} " =~ " ${RESOURCE_PATH} " ]]; then
+            # Check if this path is already in our array
+            if [[ ! " ${CHANGED_PATHS[*]} " =~ " ${RESOURCE_PATH} " ]]; then
               CHANGED_PATHS+=("$RESOURCE_PATH")
             fi
           fi

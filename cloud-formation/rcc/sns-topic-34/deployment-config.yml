@@ -84,7 +84,7 @@ deployments:
           - ParameterKey: TopicName
             ParameterValue: A-topic-1
           - ParameterKey: email
-            ParameterValue: vezarqrchik@gmail.com             
+            ParameterValue: vezarqrchik@gmail.come  
       int:
         stack-name: 'a-crs-sns-dev-test-24' 
         bucket-name: 'nzrb-home-test'

@@ -40,7 +40,7 @@ deployments:
       int: 
         tags: A_CRS_TAGS  
       stg:
-        tags: A_CRS_TAGS  213123
+        tags: A_CRS_TAG123
         tags: A_CRS_TAGS  
     parameters:
       dev:

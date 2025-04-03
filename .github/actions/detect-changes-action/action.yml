@@ -30,7 +30,7 @@ inputs:
     required: true
   applications_path: 
     description: 'Resource path provided via auto run'
-    required: false
+    required: true
     default: ''    
 outputs:
   paths:

@@ -54,7 +54,7 @@ jobs:
           pull_request_number: ${{ github.event.pull_request.number || '' }}
           resource_path_input: ${{ github.event.inputs.resource_path || '' }}
           repository: ${{ github.repository }}
-  
+          applications_path: "^cloud-formation/.*/.+/(.+\.(y[a]?ml|json|js))"
       - name: Show detected paths
         shell: bash
         run: |

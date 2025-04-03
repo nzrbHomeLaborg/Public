@@ -38,7 +38,11 @@ jobs:
           fetch-depth: 0
       - name: Update workflow name
         run: |
-          gh workflow run-name --repo ${GITHUB_REPOSITORY} ${GITHUB_RUN_ID} "Release my release"
+          curl -X PATCH \
+            -H "Authorization: token ${{ github.token }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }} \
+            -d '{"name":"Release ${{ inputs.release-tag || github.sha }}"}'
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - name: Detect Changed Applications

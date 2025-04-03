@@ -140,7 +140,7 @@ jobs:
     if: |
       always() && 
       needs.prepare-matrices.result == 'success' && 
-      (github.event_name == 'workflow_dispatch' || needs.deploy-custom.result == 'success')
+      (github.event_name == 'workflow_dispatch' || needs.deploy-dev.result == 'success')
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
@@ -221,7 +221,7 @@ jobs:
     if: |
       always() && 
       needs.prepare-matrices.result == 'success' && 
-      (github.event_name == 'workflow_dispatch' || needs.deploy-int.result == 'success')
+      (github.event_name == 'workflow_dispatch' || needs.deploy-dev.result == 'success')
     runs-on: custom
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}

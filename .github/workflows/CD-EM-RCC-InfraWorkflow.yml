@@ -10,9 +10,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "*"
-      - 'cloud-formation/rcc/**/deployment-config.yaml'
-      - 'cloud-formation/rcc/**/deployment-config.yml'    
+      - "*"   
   pull_request:
     branches: [main]
   workflow_dispatch:

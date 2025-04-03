@@ -137,10 +137,7 @@ jobs:
           echo "::notice title=Deployment ID::${GITHUB_RUN_ID}-${{ matrix.environment }}"         
   deploy-custom:
     needs: prepare-matrices
-    if: |
-      always() && 
-      needs.prepare-matrices.result == 'success' && 
-      (github.event_name == 'workflow_dispatch' || needs.deploy-dev.result == 'success')
+    if: ${{ github.event_name != 'workflow_dispatch' && fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
@@ -218,10 +215,7 @@ jobs:
 
   deploy-int:
     needs: [prepare-matrices, deploy-dev]
-    if: |
-      always() && 
-      needs.prepare-matrices.result == 'success' && 
-      (github.event_name == 'workflow_dispatch' || needs.deploy-dev.result == 'success')
+    if: ${{ github.event_name != 'workflow_dispatch' && fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
     runs-on: custom
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}

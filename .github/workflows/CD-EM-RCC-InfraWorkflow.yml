@@ -37,7 +37,6 @@ jobs:
         with:
           fetch-depth: 0
       - name: Update workflow name
-        if: ${{ inputs.create-release == 'true' }}
         run: |
           gh workflow run-name --repo ${GITHUB_REPOSITORY} ${GITHUB_RUN_ID} "Release my release"
         env:

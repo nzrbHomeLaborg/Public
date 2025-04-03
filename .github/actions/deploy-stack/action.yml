@@ -278,23 +278,23 @@ runs:
         prerelease: ${{ inputs.prerelease == 'true' }}
 
 
-        # - name: Create GitHub Release
-    #   if: ${{ inputs.create-release == 'true' }}
-    #   uses: softprops/action-gh-release@v1
-    #   with:
-    #     tag_name: ${{ inputs.release-tag || format('v{0}', github.run_number) }}
-    #     name: ${{ inputs.release-name || 'CloudFormation Templates Release' }}
-    #     body: |
-    #       CloudFormation templates have been validated, uploaded to S3, and deployed successfully.
+    - name: Create GitHub Release
+      if: ${{ inputs.create-release == 'true' }}
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ inputs.release-tag || format('v{0}', github.run_number) }}
+        name: ${{ inputs.release-name || 'CloudFormation Templates Release' }}
+        body: |
+          CloudFormation templates have been validated, uploaded to S3, and deployed successfully.
           
-    #       Stack name: ${{ inputs.stack-name }}
-    #       Region: ${{ inputs.aws-region }}
-    #       ${{ inputs.release-notes }}
-    #     draft: ${{ inputs.draft-release == 'true' }}
-    #     prerelease: ${{ inputs.prerelease == 'true' }}
-    #     files: ${{ inputs.source-folder }}/${{ inputs.template-name }}
-    #   env:
-    #     GITHUB_TOKEN: ${{ github.token }}
+          Stack name: ${{ inputs.stack-name }}
+          Region: ${{ inputs.aws-region }}
+          ${{ inputs.release-notes }}
+        draft: ${{ inputs.draft-release == 'true' }}
+        prerelease: ${{ inputs.prerelease == 'true' }}
+        files: ${{ inputs.source-folder }}/${{ inputs.template-name }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
 
     - name: Upload templates to release
       if: ${{ inputs.create-release == 'true' }}

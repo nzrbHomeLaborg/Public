@@ -27,7 +27,7 @@ on:
 
 jobs:
   detect-changes:
-    runs-on: custom
+    runs-on: ubuntu-latest
     outputs:
       resource_paths: ${{ steps.detect-changes-action.outputs.paths }}
       specific_environment: ${{ github.event.inputs.environment }}
@@ -36,7 +36,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+      - name: Update workflow name
+        if: ${{ inputs.create-release == 'true' }}
+        run: |
+          gh workflow run-name --repo ${GITHUB_REPOSITORY} ${GITHUB_RUN_ID} "Release my release"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Detect Changed Applications
         id: detect-changes-action
         uses: ./.github/actions/detect-changes-action

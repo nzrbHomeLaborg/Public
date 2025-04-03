@@ -28,10 +28,11 @@ inputs:
   repository:
     description: 'GitHub repository'
     required: true
-  applications_path: 
-    description: 'Resource path provided via auto run'
+  app_name:
+    description: 'Application name for path validation in workflow_dispatch events'
     required: false
-    default: ''    
+    default: ''
+
 outputs:
   paths:
     description: 'Comma-separated list of detected resource paths'
@@ -40,6 +41,11 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Detect Changed Applications
       id: detect-applications
       shell: bash
@@ -49,112 +55,77 @@ runs:
           echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
         }
         
-        log "Starting change detection..."
-        
         # For workflow_dispatch events
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          log "Workflow dispatch event detected."
-          
-          # Extract the resource path from the input
+          # Get the resource path and app name
           RESOURCE_PATH="${{ github.event.inputs.resource_path }}"
-          log "Requested resource path: $RESOURCE_PATH"
+          APP_NAME="${{ inputs.app_name }}"
           
-          # Extract the base application name from the resource path
-          # This assumes the resource path format is like "cloud-formation/nzrb/something"
-          BASE_APP_NAME=$(echo "$RESOURCE_PATH" | awk -F'/' '{print $2}')
-          log "Base application name from path: $BASE_APP_NAME"
-          
-          # Get the configured applications_path
-          CONFIGURED_APP="${{ inputs.applications_path }}"
-          log "Configured applications_path: $CONFIGURED_APP"
-          
-          # Validate that the requested resource belongs to the configured application
-          if [[ "$BASE_APP_NAME" == "$CONFIGURED_APP" ]]; then
-            log "Resource path validation passed."
-            echo "paths=$RESOURCE_PATH" >> $GITHUB_OUTPUT
-          elif [[ -z "$BASE_APP_NAME" ]] || [[ -z "$CONFIGURED_APP" ]]; then
-            log "WARNING: Empty base app name or configured app. Proceeding with caution."
-            echo "paths=$RESOURCE_PATH" >> $GITHUB_OUTPUT
-          else
-            log "ERROR: Resource path validation failed. The resource '$RESOURCE_PATH' (app: '$BASE_APP_NAME') does not match the configured application '$CONFIGURED_APP'."
-            log "This workflow is configured for '$CONFIGURED_APP' resources only."
-            echo "paths=" >> $GITHUB_OUTPUT  # Empty output means no paths to process
+          # Validate resource path against app_name if app_name is provided
+          if [[ -n "$APP_NAME" ]]; then
+            # Check if the resource path starts with cloud-formation/{app_name}/
+            EXPECTED_PREFIX="cloud-formation/$APP_NAME/"
+            
+            if [[ "$RESOURCE_PATH" != $EXPECTED_PREFIX* ]]; then
+              echo "ERROR: Resource path '$RESOURCE_PATH' is not valid for app '$APP_NAME'"
+              echo "Resource path must start with '$EXPECTED_PREFIX'"
+              echo "paths=" >> $GITHUB_OUTPUT
+              exit 1
+            fi
           fi
           
+          echo "paths=$RESOURCE_PATH" >> $GITHUB_OUTPUT
           exit 0
         fi
         
         CHANGED_PATHS=()
         CHANGED_FILES=""
         
-        # Store applications_path in a variable to avoid issues with special characters
-        APPS_PATH="${{ inputs.applications_path }}"
-        log "Applications path: $APPS_PATH"
-        
         # Determine event type and get changed files
         EVENT_NAME="${{ github.event_name }}"
-        log "Event name: $EVENT_NAME"
         
         if [[ "$EVENT_NAME" == "pull_request" ]]; then
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          log "Pull request event detected (PR #$PR_NUMBER)"
           
-          # Save the API response to a file for inspection
-          API_RESPONSE=$(curl -s -H "Authorization: token ${{ github.token }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files")
+          # Get only the latest commit SHA in the PR
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          # Get the SHA of the commit before the latest one
+          PREV_SHA=$(git rev-parse $HEAD_SHA^)
           
-          # Log the first part of the response for debugging
-          log "API Response (first 100 chars): ${API_RESPONSE:0:100}"
+          # Get changes from just the latest commit, not the entire PR
+          CHANGED_FILES=$(git diff --name-only $PREV_SHA $HEAD_SHA)
           
-          # Check if we got a valid JSON array before processing
-          if echo "$API_RESPONSE" | jq 'if type=="array" then true else false end' | grep -q true; then
-            log "Valid JSON array received"
-            CHANGED_FILES=$(echo "$API_RESPONSE" | jq -r '.[].filename')
-          else
-            log "ERROR: API did not return a JSON array"
-            log "Response type: $(echo "$API_RESPONSE" | jq -r 'type')"
+          # If no files were found, fall back to the GitHub API
+          if [[ -z "$CHANGED_FILES" ]]; then
+            # Save the API response for inspection
+            API_RESPONSE=$(curl -s -H "Authorization: token ${{ github.token }}" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files")
             
-            # Check if response contains error message
-            if echo "$API_RESPONSE" | jq -e '.message' >/dev/null 2>&1; then
-              ERROR_MSG=$(echo "$API_RESPONSE" | jq -r '.message')
-              log "API Error: $ERROR_MSG"
+            # Check if we got a valid JSON array before processing
+            if echo "$API_RESPONSE" | jq 'if type=="array" then true else false end' | grep -q true; then
+              CHANGED_FILES=$(echo "$API_RESPONSE" | jq -r '.[].filename')
+            else
+              # Fallback to git diff as a recovery mechanism
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "")
             fi
-            
-            # Fallback to git diff as a recovery mechanism
-            log "Falling back to git diff"
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "")
           fi
           
         elif [[ "$EVENT_NAME" == "push" ]]; then
-          log "Push event detected"
-          
           PARENT_COUNT=$(git cat-file -p ${{ github.sha }} | grep -c "^parent ")
           
           if [[ $PARENT_COUNT -gt 1 ]]; then
-            log "Merge commit detected with $PARENT_COUNT parents"
-            
             MERGE_BASE=$(git merge-base ${{ github.event.before }} ${{ github.sha }})
-            log "Merge base: $MERGE_BASE"
-            
             CHANGED_FILES=$(git diff --name-only $MERGE_BASE ${{ github.sha }})
           else
-            log "Regular push detected"
             CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
             
             if [[ -z "$CHANGED_FILES" ]]; then
-              log "No files found with direct comparison, trying commit range..."
               CHANGED_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }})
             fi
           fi
         else
-          log "Event type: $EVENT_NAME (fallback)"
           CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "")
         fi
-        
-        log "All changed files being considered:"
-        echo "$CHANGED_FILES"
-        
-        log "Filtering for deployment config files..."
         
         while IFS= read -r file; do
           # Skip empty lines
@@ -163,34 +134,14 @@ runs:
           fi
         
           # Check if the file is a deployment config file
-          # Using pattern matching and avoiding direct insertion of GitHub variables in conditionals
-          # We need to ensure we're matching the exact application path, not just a prefix
-          # For example, we want to match 'cloud-formation/nzrb/' but not 'cloud-formation/nzrb2/'
-          
-          # Extract directory components for more precise matching
-          FILE_DIR=$(dirname "$file")
-          APP_DIR_PATTERN="cloud-formation/${APPS_PATH}"
-          
-          # Check if file matches our deployment config pattern
-          if [[ "$file" == *deployment-config.y*ml && "$FILE_DIR" == ${APP_DIR_PATTERN}/* ]]; then
-            # Extra validation to ensure we're not matching similar-named but different apps
-            FILE_APP=$(echo "$FILE_DIR" | awk -F'/' '{print $2}')
-            
-            if [[ "$FILE_APP" == "$APPS_PATH" ]]; then
+          if [[ "$file" == cloud-formation/*/*.y*ml ]]; then
             RESOURCE_PATH=$(dirname "$file")
-            log "Match found! File: $file, Resource path: $RESOURCE_PATH"
         
-              # Check if this path is already in our array
-              if [[ ! " ${CHANGED_PATHS[*]} " =~ " ${RESOURCE_PATH} " ]]; then
-                CHANGED_PATHS+=("$RESOURCE_PATH")
-              fi
-            else
-              log "Skipping file '$file' - app name '$FILE_APP' doesn't match configured app '$APPS_PATH'"
+            if [[ ! " ${CHANGED_PATHS[@]} " =~ " ${RESOURCE_PATH} " ]]; then
+              CHANGED_PATHS+=("$RESOURCE_PATH")
             fi
           fi
         done <<< "$CHANGED_FILES"
-        
-        log "Detected resource paths: ${CHANGED_PATHS[*]}"
         
         # Convert array to comma-separated string
         if [[ ${#CHANGED_PATHS[@]} -gt 0 ]]; then
@@ -200,7 +151,6 @@ runs:
           PATHS=""
         fi
         
-        log "Final paths output: '$PATHS'"
         echo "paths=$PATHS" >> $GITHUB_OUTPUT
         
         # Debug info for empty results
@@ -213,5 +163,3 @@ runs:
           log "Before: ${{ github.event.before || 'N/A' }}"
           log "After: ${{ github.event.after || 'N/A' }}"
         fi
-        
-        log "Change detection complete."

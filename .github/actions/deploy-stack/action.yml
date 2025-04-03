@@ -269,8 +269,7 @@ runs:
         tag_name: ${{ inputs.release-tag || github.sha }}
         release_name: ${{ inputs.release-name || 'CloudFormation Templates Release' }}
         body: |
-          CloudFormation templates have been validated, uploaded to S3, and deployed successfully.
-          
+          CloudFormation templates have been validated, uploaded to S3, and deployed successfully. 
           Stack name: ${{ inputs.stack-name }}
           Region: ${{ inputs.aws-region }}
           ${{ inputs.release-notes }}

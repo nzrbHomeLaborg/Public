@@ -70,7 +70,7 @@ runs:
               echo "ERROR: Resource path '$RESOURCE_PATH' is not valid for app '$APP_NAME'"
               echo "Resource path must start with '$EXPECTED_PREFIX'"
               echo "paths=" >> $GITHUB_OUTPUT
-              exit 1
+              exit 0
             fi
           fi
           

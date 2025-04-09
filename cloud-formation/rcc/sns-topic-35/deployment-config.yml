@@ -31,7 +31,7 @@ deployments:
       stg: CFN_ROLE_ARN
     iam_execution_role_secrets:
       dev: IAM_EXECUTION_ROLE_ARN
-      int: IAM_EXECUTION_ROLE_ARN
+      int: IAM_EXECUTION_ROLE_ARN12
       stg: IAM_EXECUTION_ROLE_ARN
       qa: IAM_EXECUTION_ROLE_ARN13123
     github_vars:

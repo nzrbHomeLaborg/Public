@@ -33,7 +33,7 @@ deployments:
       dev: IAM_EXECUTION_ROLE_ARN
       int: IAM_EXECUTION_ROLE_ARN
       stg: IAM_EXECUTION_ROLE_ARN
-      qa: IAM_EXECUTION_ROLE_ARN
+      qa: IAM_EXECUTION_ROLE_ARN13
     github_vars:
       dev:
         tags: A_CRS_TAGS

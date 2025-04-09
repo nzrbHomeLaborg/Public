@@ -40,7 +40,6 @@ jobs:
           fetch-depth: 0
       - name: Identify Changed Resources
         id: identify-changes
-        if: github.event_name == 'push'
         run: |
           echo "### 🚀 Deployment Information" >> $GITHUB_STEP_SUMMARY
           

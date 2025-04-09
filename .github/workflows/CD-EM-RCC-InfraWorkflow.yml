@@ -1,10 +1,5 @@
 name: CD-EM-RCC-InfraWorkflow
-run-name: >-
-  ${{ github.event_name == 'pull_request' 
-      && github.event.pull_request.title 
-      || github.event_name == 'workflow_dispatch' 
-      && format('Deploy {0} to {1}', github.event.inputs.resource_path || 'Auto', github.event.inputs.environment || 'All')
-      || format('Deploy to {0}', github.ref_name) }}
+run-name: Initializing deployment...
 
 
 
@@ -29,6 +24,52 @@ on:
         type: string
 
 jobs:
+  set-workflow-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Run Name
+        id: set-name
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "run_name=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            resource="${{ github.event.inputs.resource_path || 'Auto' }}"
+            env="${{ github.event.inputs.environment || 'All' }}"
+            echo "run_name=Deploy ${resource} to ${env}" >> $GITHUB_OUTPUT
+          else
+            # For push events, try to identify changed paths
+            git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E "cloud-formation/rcc/[^/]+" | sort | uniq > changed_paths.txt
+            if [ -s changed_paths.txt ]; then
+              paths=$(cat changed_paths.txt | grep -oE "cloud-formation/rcc/[^/]+" | sort | uniq | head -3 | xargs -I{} basename {} | tr '\n' ',' | sed 's/,$//')
+              if [ $(cat changed_paths.txt | grep -oE "cloud-formation/rcc/[^/]+" | sort | uniq | wc -l) -gt 3 ]; then
+                paths="${paths}..."
+              fi
+              echo "run_name=Deploy ${paths} to $(echo ${{ github.ref_name }})" >> $GITHUB_OUTPUT
+            else
+              echo "run_name=Deploy to $(echo ${{ github.ref_name }})" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Update workflow name
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const runId = context.runId;
+            const newName = '${{ steps.set-name.outputs.run_name }}';
+            
+            await github.rest.actions.updateWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+              name: newName
+            });
+
+
   detect-changes:
     runs-on: ubuntu-latest
     outputs:

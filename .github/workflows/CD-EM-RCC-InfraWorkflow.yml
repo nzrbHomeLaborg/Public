@@ -163,7 +163,7 @@ jobs:
           rm /tmp/github_secrets_plaintext.json /tmp/encryption_key
           echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.encrypted" >> $GITHUB_ENV
 
-          - name: Check resource dependencies
+        - name: Check resource dependencies
           if: ${{ fromJson(matrix.depends_on_resources)[0] != null }}
           shell: bash
           run: |

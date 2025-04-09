@@ -51,6 +51,7 @@ jobs:
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E "cloud-formation/rcc/[^/]+" | sort | uniq > changed_paths.txt
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "📌 Manual Trigger" >> $GITHUB_STEP_SUMMARY
+            echo "🔄 Triggered by: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
             echo "🔍 Resource Path: ${{ github.event.inputs.resource_path || 'Auto' }}" >> $GITHUB_STEP_SUMMARY
             echo "🌐 Environment: ${{ github.event.inputs.environment || 'All' }}" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY

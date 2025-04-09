@@ -145,8 +145,8 @@ runs:
             AWS_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].aws_role_secrets[$env] // "AWS_ROLE_TO_ASSUME"')
             CFN_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].cfn_role_secrets[$env] // "CFN_ROLE_ARN"')
             IAM_ROLE_SECRET=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].iam_execution_role_secrets[$env] // "IAM_EXECUTION_ROLE_ARN"')
-            DEPENDS_ON=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].dependsOn // ""')
             VARS_CONFIG=$(echo "$CONFIG_CONTENT" | jq -c --arg env "$ENV" '.deployments[0].github_vars[$env] // {}')
+            DEPENDS_ON_RESOURCES=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].depends_on_resources // "[]"')
 
             # Check if custom deployment is enabled for this environment
             CUSTOM_DEPLOYMENT=$(echo "$CONFIG_CONTENT" | jq -r --arg env "$ENV" '.deployments[0].parameters[$env].custom_deployment // "false"')
@@ -159,7 +159,7 @@ runs:
               echo "::warning::Missing required configuration for $RESOURCE_PATH in $ENV environment"
               continue
             fi
-            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"github_vars\":$VARS_CONFIG,\"deploy_after\":\"$DEPLOY_AFTER\",\"parameters\":$PARAMS}" 
+            MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"depends_on_resources\":\"$DEPENDS_ON_RESOURCES\",\"github_vars\":$VARS_CONFIG,\"deploy_after\":\"$DEPLOY_AFTER\",\"parameters\":$PARAMS}" 
             # Just pass through the parameters as-is
             # The GitHub secrets will be resolved during workflow execution
             # MATRIX_ITEM="{\"application\":\"$APP\",\"resource\":\"$RESOURCE\",\"environment\":\"$ENV\",\"runner\":\"$RUNNER\",\"github_environment\":\"$GH_ENV\",\"aws_region\":\"$AWS_REGION\",\"aws_role_secret\":\"$AWS_ROLE_SECRET\",\"cfn_role_secret\":\"$CFN_ROLE_SECRET\",\"iam_role_secret\":\"$IAM_ROLE_SECRET\",\"dependsOn\":\"$DEPENDS_ON\",\"github_vars\":$VARS_CONFIG,\"parameters\":$PARAMS}"

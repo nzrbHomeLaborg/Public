@@ -162,7 +162,33 @@ jobs:
           openssl enc -aes-256-cbc -pbkdf2 -iter 10000 -salt -in /tmp/github_secrets_plaintext.json -out /tmp/github_secrets.encrypted -pass file:/tmp/encryption_key
           rm /tmp/github_secrets_plaintext.json /tmp/encryption_key
           echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.encrypted" >> $GITHUB_ENV
-        
+
+          - name: Check resource dependencies
+          if: ${{ fromJson(matrix.depends_on_resources)[0] != null }}
+          shell: bash
+          run: |
+            # Get the list of resources that need to complete first
+            DEPENDS_ON_RESOURCES='${{ toJSON(matrix.depends_on_resources) }}'
+            echo "This resource depends on: $DEPENDS_ON_RESOURCES"
+            
+            # For each dependency, check if its job is completed
+            for RESOURCE in $(echo $DEPENDS_ON_RESOURCES | jq -r '.[]'); do
+              echo "Checking status of dependency: $RESOURCE"
+              
+              # Look for a job with a name matching the pattern "Deploy $APP-$RESOURCE to $ENV"
+              # This assumes job names follow this pattern consistently
+              DEPENDENT_JOB_STATUS=$(gh api \
+                repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs \
+                --jq '.jobs[] | select(.name | test("Deploy ${{ matrix.application }}-'$RESOURCE' to ${{ matrix.environment }}")) | .conclusion')
+              
+              if [[ "$DEPENDENT_JOB_STATUS" != "success" ]]; then
+                echo "Dependency $RESOURCE has not completed successfully yet"
+                exit 1
+              fi
+            done
+          env:
+            GITHUB_TOKEN: ${{ github.token }}            
+          
       - name: Deploy Stack
         uses: ./.github/actions/composite
         with:

@@ -1,6 +1,14 @@
 name: CD-EM-RCC-InfraWorkflow
-run-name: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || github.event_name == 'workflow_dispatch' && format('Deploy {0} to {1}', github.event.inputs.resource_path || 'Auto', github.event.inputs.environment || 'All') || format('Deploy to {0}', github.ref_name) }}
-
+run-name: ${{ 
+  github.event_name == 'pull_request' 
+    ? github.event.pull_request.title 
+    : (github.event_name == 'workflow_dispatch' 
+        ? format('Deploy {0} to {1}', github.event.inputs.resource_path || 'Auto', github.event.inputs.environment || 'All')
+        : contains(github.event.head_commit.message, 'Merge pull request') 
+          ? format('Deploy from PR: {0}', github.event.head_commit.message | regex_replace('^Merge pull request #(\d+).*', '$1'))
+          : format('Deploy to {0} (#{1})', github.ref_name, github.run_number)
+      )
+}}
 
 
 permissions:
@@ -24,35 +32,6 @@ on:
         type: string
 
 jobs:
-  summarize-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      changed_resources: ${{ steps.identify-changes.outputs.changed_resources }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          
-      - name: Identify Changed Resources
-        id: identify-changes
-        if: github.event_name == 'push'
-        run: |
-          git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E "cloud-formation/rcc/[^/]+" | sort | uniq > changed_paths.txt
-          if [ -s changed_paths.txt ]; then
-            resources=$(cat changed_paths.txt | grep -oE "cloud-formation/rcc/[^/]+" | sort | uniq | xargs -I{} basename {} | tr '\n' ', ' | sed 's/, $//')
-            echo "changed_resources=${resources}" >> $GITHUB_OUTPUT
-            echo "### 🚀 Deploying Resources" >> $GITHUB_STEP_SUMMARY
-            echo "The following resources are being deployed:" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            cat changed_paths.txt | grep -oE "cloud-formation/rcc/[^/]+" | sort | uniq | xargs -I{} basename {} | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
-          else
-            echo "changed_resources=No specific resources identified" >> $GITHUB_OUTPUT
-            echo "### 🚀 Deployment Info" >> $GITHUB_STEP_SUMMARY
-            echo "No specific resources were identified in this deployment." >> $GITHUB_STEP_SUMMARY
-          fi
-
-
   detect-changes:
     runs-on: ubuntu-latest
     outputs:

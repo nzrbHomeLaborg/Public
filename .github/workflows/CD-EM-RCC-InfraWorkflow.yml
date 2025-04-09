@@ -42,17 +42,43 @@ jobs:
         id: identify-changes
         if: github.event_name == 'push'
         run: |
-          git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E "cloud-formation/rcc/[^/]+" | sort | uniq > changed_paths.txt
+          echo "### 🚀 Deployment Information" >> $GITHUB_STEP_SUMMARY
+          
+          # Handle different event types
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "📌 PR Title: ${{ github.event.pull_request.title }}" >> $GITHUB_STEP_SUMMARY
+            echo "👤 Author: ${{ github.event.pull_request.user.login }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E "cloud-formation/rcc/[^/]+" | sort | uniq > changed_paths.txt
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "📌 Manual Trigger" >> $GITHUB_STEP_SUMMARY
+            echo "🔍 Resource Path: ${{ github.event.inputs.resource_path || 'Auto' }}" >> $GITHUB_STEP_SUMMARY
+            echo "🌐 Environment: ${{ github.event.inputs.environment || 'All' }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [[ -n "${{ github.event.inputs.resource_path }}" ]]; then
+              echo "${{ github.event.inputs.resource_path }}" > changed_paths.txt
+            else
+              find cloud-formation/rcc -name "deployment-config.yaml" -o -name "deployment-config.yml" | grep -E "cloud-formation/rcc/[^/]+" | sort | uniq > changed_paths.txt
+            fi
+          else # push event
+            echo "📌 Push to ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "📄 Last Commit: ${{ github.event.head_commit.message }}" >> $GITHUB_STEP_SUMMARY
+            echo "👤 Author: ${{ github.event.head_commit.author.name }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E "cloud-formation/rcc/[^/]+" | sort | uniq > changed_paths.txt
+          fi
+          
+          # Process identified resources for all event types
           if [ -s changed_paths.txt ]; then
+            echo "### 📦 Resources Being Deployed" >> $GITHUB_STEP_SUMMARY
             resources=$(cat changed_paths.txt | grep -oE "cloud-formation/rcc/[^/]+" | sort | uniq | xargs -I{} basename {} | tr '\n' ', ' | sed 's/, $//')
             echo "changed_resources=${resources}" >> $GITHUB_OUTPUT
-            echo "### 🚀 Deploying Resources" >> $GITHUB_STEP_SUMMARY
-            echo "The following resources are being deployed:" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
+            # List resources in summary
             cat changed_paths.txt | grep -oE "cloud-formation/rcc/[^/]+" | sort | uniq | xargs -I{} basename {} | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
           else
             echo "changed_resources=No specific resources identified" >> $GITHUB_OUTPUT
-            echo "### 🚀 Deployment Info" >> $GITHUB_STEP_SUMMARY
+            echo "### ℹ️ Resource Information" >> $GITHUB_STEP_SUMMARY
             echo "No specific resources were identified in this deployment." >> $GITHUB_STEP_SUMMARY
           fi
 

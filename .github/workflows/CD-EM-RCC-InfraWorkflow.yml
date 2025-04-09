@@ -189,6 +189,7 @@ jobs:
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
       fail-fast: false
+      max-parallel: 1
     environment: ${{ matrix.github_environment }}
     
     name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to ${{ matrix.environment }}

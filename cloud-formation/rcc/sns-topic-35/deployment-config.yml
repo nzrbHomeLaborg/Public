@@ -97,4 +97,4 @@ deployments:
           - ParameterKey: TopicName
             ParameterValue: A-topic-2
           - ParameterKey: email
-            ParameterValue: vezarqrchik@gmail.com            
+            ParameterValue: vezarqrchik@gmail.co        

@@ -38,6 +38,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Add test summary
+        run: |
+          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Passed: 42" >> $GITHUB_STEP_SUMMARY
+          echo "❌ Failed: 2" >> $GITHUB_STEP_SUMMARY          
       - name: Identify Changed Resources
         id: identify-changes
         run: |

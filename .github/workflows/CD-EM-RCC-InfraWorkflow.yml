@@ -1,14 +1,9 @@
 name: CD-EM-RCC-InfraWorkflow
-run-name: ${{ 
-  github.event_name == 'pull_request' 
-    ? github.event.pull_request.title 
-    : (github.event_name == 'workflow_dispatch' 
-        ? format('Deploy {0} to {1}', github.event.inputs.resource_path || 'Auto', github.event.inputs.environment || 'All')
-        : contains(github.event.head_commit.message, 'Merge pull request') 
-          ? format('Deploy from PR: {0}', github.event.head_commit.message | regex_replace('^Merge pull request #(\d+).*', '$1'))
-          : format('Deploy to {0} (#{1})', github.ref_name, github.run_number)
-      )
-}}
+run-name: >-
+  ${{ github.event_name == 'pull_request' && github.event.pull_request.title ||
+      github.event_name == 'workflow_dispatch' && 
+      format('Deploy {0} to {1}', github.event.inputs.resource_path || 'Auto', github.event.inputs.environment || 'All') ||
+      format('Deploy to {0}', github.ref_name) }}
 
 
 permissions:

@@ -183,8 +183,11 @@ jobs:
           echo "JOB_ID=${GITHUB_RUN_ID}-${GITHUB_RUN_NUMBER}-${{ matrix.environment }}" >> $GITHUB_ENV
           echo "::notice title=Deployment ID::${GITHUB_RUN_ID}-${{ matrix.environment }}"         
   deploy-custom:
-    needs: prepare-matrices
-    if: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null }}
+    needs: [prepare-matrices, deploy-dev]
+    if: |
+      ${{ always() && 
+      fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null &&
+      (needs.deploy-dev.result == 'success' || needs.deploy-dev.result == 'skipped' || !contains(needs.*.job, 'deploy-dev')) }}
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}

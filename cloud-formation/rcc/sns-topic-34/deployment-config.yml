@@ -1,5 +1,5 @@
 deployments:
-  - resource: a-crs-ecc-sns-test
+  - resource: a-crs-ecc-sns-test123
     environments:
       - dev
       - int

@@ -1,5 +1,12 @@
 name: CD-EM-RCC-InfraWorkflow
-run-name: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || (github.event_name == 'workflow_dispatch' && format('Deploy %s to %s', github.event.inputs.resource_path || 'Auto', github.event.inputs.environment || 'All') || format('Deploy %s via Push', github.ref_name)) }}
+run-name: ${{ 
+  github.event_name == 'pull_request' 
+    ? github.event.pull_request.title 
+    : (github.event_name == 'workflow_dispatch' 
+        ? format('Deploy %s to %s', github.event.inputs.resource_path || 'Auto', github.event.inputs.environment || 'All')
+        : 'Deploy via Push to ' + github.ref_name + ' #' + github.run_number
+      )
+}}
 
 
 

@@ -213,165 +213,165 @@ jobs:
         run: |
           echo "JOB_ID=${GITHUB_RUN_ID}-${GITHUB_RUN_NUMBER}-${{ matrix.environment }}" >> $GITHUB_ENV
           echo "::notice title=Deployment ID::${GITHUB_RUN_ID}-${{ matrix.environment }}"         
-  deploy-custom:
-    needs: [prepare-matrices, deploy-dev]
-    if: |
-      ${{ always() && 
-      fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null &&
-      (needs.deploy-dev.result == 'success' || needs.deploy-dev.result == 'skipped' || !contains(needs.*.job, 'deploy-dev')) }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
-      fail-fast: false
-      max-parallel: 1
-    environment: ${{ matrix.github_environment }}
+  # deploy-custom:
+  #   needs: [prepare-matrices, deploy-dev]
+  #   if: |
+  #     ${{ always() && 
+  #     fromJSON(needs.prepare-matrices.outputs.custom_matrix).include[0] != null &&
+  #     (needs.deploy-dev.result == 'success' || needs.deploy-dev.result == 'skipped' || !contains(needs.*.job, 'deploy-dev')) }}
+  #   runs-on: ${{ matrix.runner }}
+  #   strategy:
+  #     matrix: ${{ fromJSON(needs.prepare-matrices.outputs.custom_matrix) }}
+  #     fail-fast: false
+  #     max-parallel: 1
+  #   environment: ${{ matrix.github_environment }}
     
-    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to ${{ matrix.environment }}
+  #   name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to ${{ matrix.environment }}
     
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Install yq
-        shell: bash
-        run: |
-          if ! command -v yq &> /dev/null; then
-            echo "Installing yq..."
-            VERSION=v4.30.8
-            BINARY=yq_linux_amd64
-            wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - | \
-              tar xz
-            chmod +x ${BINARY}
-            sudo mv ${BINARY} /usr/bin/yq || mkdir -p $HOME/bin && mv ${BINARY} $HOME/bin/yq && echo "$HOME/bin" >> $GITHUB_PATH
-          fi      
-      - name: Check prerequisite jobs
-        shell: bash
-        run: |
-          # Отримуємо конфіг файл
-          CONFIG_PATH="${{ matrix.application }}/${{ matrix.resource }}/deployment-config.yaml"
-          if [[ ! -f "$CONFIG_PATH" ]]; then
-            CONFIG_PATH="${{ matrix.application }}/${{ matrix.resource }}/deployment-config.yml"
-          fi
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #     - name: Install yq
+  #       shell: bash
+  #       run: |
+  #         if ! command -v yq &> /dev/null; then
+  #           echo "Installing yq..."
+  #           VERSION=v4.30.8
+  #           BINARY=yq_linux_amd64
+  #           wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY}.tar.gz -O - | \
+  #             tar xz
+  #           chmod +x ${BINARY}
+  #           sudo mv ${BINARY} /usr/bin/yq || mkdir -p $HOME/bin && mv ${BINARY} $HOME/bin/yq && echo "$HOME/bin" >> $GITHUB_PATH
+  #         fi      
+  #     - name: Check prerequisite jobs
+  #       shell: bash
+  #       run: |
+  #         # Отримуємо конфіг файл
+  #         CONFIG_PATH="${{ matrix.application }}/${{ matrix.resource }}/deployment-config.yaml"
+  #         if [[ ! -f "$CONFIG_PATH" ]]; then
+  #           CONFIG_PATH="${{ matrix.application }}/${{ matrix.resource }}/deployment-config.yml"
+  #         fi
           
-          # Читаємо значення deploy_after
-          DEPLOY_AFTER=$(yq -r '.deployments[0].parameters.${{ matrix.environment }}.deploy_after // "dev"' $CONFIG_PATH)
-          echo "Need to wait for $DEPLOY_AFTER deployment to complete"
+  #         # Читаємо значення deploy_after
+  #         DEPLOY_AFTER=$(yq -r '.deployments[0].parameters.${{ matrix.environment }}.deploy_after // "dev"' $CONFIG_PATH)
+  #         echo "Need to wait for $DEPLOY_AFTER deployment to complete"
           
-          # Перевіряємо, чи завершились відповідні задачі
-          if [[ "$DEPLOY_AFTER" == "int" ]]; then
-            WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --jq '.jobs[] | select(.name | test("Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT")) | .status')
-            if [[ "$WORKFLOW_ID" != "completed" ]]; then
-              echo "INT deployment has not completed yet"
-              exit 1
-            fi
-          elif [[ "$DEPLOY_AFTER" == "prod" ]]; then
-            WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --jq '.jobs[] | select(.name | test("Deploy ${{ matrix.application }}-${{ matrix.resource }} to PROD")) | .status')
-            if [[ "$WORKFLOW_ID" != "completed" ]]; then
-              echo "PROD deployment has not completed yet"
-              exit 1
-            fi
-          fi
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-      - name: Deploy Stack
-        if: ${{ matrix.deploy_after == 'int' || matrix.deploy_after == 'prod' }}
-        uses: ./.github/actions/composite
-        with:
-          environment: ${{ matrix.environment }}
-          stack-name: ${{ matrix.parameters.stack-name }}
-          bucket-name: ${{ matrix.parameters.bucket-name }}
-          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
-          target-folder: ${{ matrix.parameters.target-folder }}
-          source-folder: ${{ matrix.parameters.source-folder }}
-          template-name: ${{ matrix.parameters.template-name }}
-          filename-patterns: ${{ matrix.parameters.filename-patterns }}
-          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
-          extraArgs: ${{ matrix.parameters.extraArgs }}          
-          parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
-          tags: ${{ matrix.parameters.tags }}
-          aws-region: ${{ matrix.aws_region }}
-          aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
-          cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
-          iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
-          SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
+  #         # Перевіряємо, чи завершились відповідні задачі
+  #         if [[ "$DEPLOY_AFTER" == "int" ]]; then
+  #           WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --jq '.jobs[] | select(.name | test("Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT")) | .status')
+  #           if [[ "$WORKFLOW_ID" != "completed" ]]; then
+  #             echo "INT deployment has not completed yet"
+  #             exit 1
+  #           fi
+  #         elif [[ "$DEPLOY_AFTER" == "prod" ]]; then
+  #           WORKFLOW_ID=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --jq '.jobs[] | select(.name | test("Deploy ${{ matrix.application }}-${{ matrix.resource }} to PROD")) | .status')
+  #           if [[ "$WORKFLOW_ID" != "completed" ]]; then
+  #             echo "PROD deployment has not completed yet"
+  #             exit 1
+  #           fi
+  #         fi
+  #       env:
+  #         GITHUB_TOKEN: ${{ github.token }}
+  #     - name: Deploy Stack
+  #       if: ${{ matrix.deploy_after == 'int' || matrix.deploy_after == 'prod' }}
+  #       uses: ./.github/actions/composite
+  #       with:
+  #         environment: ${{ matrix.environment }}
+  #         stack-name: ${{ matrix.parameters.stack-name }}
+  #         bucket-name: ${{ matrix.parameters.bucket-name }}
+  #         upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+  #         target-folder: ${{ matrix.parameters.target-folder }}
+  #         source-folder: ${{ matrix.parameters.source-folder }}
+  #         template-name: ${{ matrix.parameters.template-name }}
+  #         filename-patterns: ${{ matrix.parameters.filename-patterns }}
+  #         cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+  #         extraArgs: ${{ matrix.parameters.extraArgs }}          
+  #         parameter-file: ${{ matrix.parameters.parameter-file }}
+  #         inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+  #         tags: ${{ matrix.parameters.tags }}
+  #         aws-region: ${{ matrix.aws_region }}
+  #         aws-role-to-assume: ${{ secrets[matrix.aws_role_secret] }}
+  #         cfn-role-arn: ${{ secrets[matrix.cfn_role_secret] }}
+  #         iam-execution-role-arn: ${{ secrets[matrix.iam_role_secret] }}
+  #         SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
 
-  deploy-int:
-    needs: [prepare-matrices, deploy-dev]
-    if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
-    runs-on: custom
-    strategy:
-      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
-      fail-fast: false
-    environment: ${{ matrix.github_environment }}
+  # deploy-int:
+  #   needs: [prepare-matrices, deploy-dev]
+  #   if: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix).include[0] != null }}
+  #   runs-on: custom
+  #   strategy:
+  #     matrix: ${{ fromJSON(needs.prepare-matrices.outputs.int_matrix) }}
+  #     fail-fast: false
+  #   environment: ${{ matrix.github_environment }}
     
-    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
+  #   name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to INT
     
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
       
       
-      - name: Deploy Stack
-        uses: ./.github/actions/composite
-        with:
-          environment: ${{ matrix.environment }}
-          stack-name: ${{ matrix.parameters.stack-name }}
-          bucket-name: ${{ matrix.parameters.bucket-name }}
-          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
-          target-folder: ${{ matrix.parameters.target-folder }}
-          source-folder: ${{ matrix.parameters.source-folder }}
-          template-name: ${{ matrix.parameters.template-name }}
-          filename-patterns: ${{ matrix.parameters.filename-patterns }}
-          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
-          extraArgs: ${{ matrix.parameters.extraArgs }}          
-          parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
-          tags: ${{ matrix.parameters.tags }}
-          aws-region: ${{ matrix.aws_region }}
-          aws-role-to-assume: ${{ secrets[matrix.aws_role_secre] }}
-          cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
-          iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
-          SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
+  #     - name: Deploy Stack
+  #       uses: ./.github/actions/composite
+  #       with:
+  #         environment: ${{ matrix.environment }}
+  #         stack-name: ${{ matrix.parameters.stack-name }}
+  #         bucket-name: ${{ matrix.parameters.bucket-name }}
+  #         upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+  #         target-folder: ${{ matrix.parameters.target-folder }}
+  #         source-folder: ${{ matrix.parameters.source-folder }}
+  #         template-name: ${{ matrix.parameters.template-name }}
+  #         filename-patterns: ${{ matrix.parameters.filename-patterns }}
+  #         cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+  #         extraArgs: ${{ matrix.parameters.extraArgs }}          
+  #         parameter-file: ${{ matrix.parameters.parameter-file }}
+  #         inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+  #         tags: ${{ matrix.parameters.tags }}
+  #         aws-region: ${{ matrix.aws_region }}
+  #         aws-role-to-assume: ${{ secrets[matrix.aws_role_secre] }}
+  #         cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
+  #         iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
+  #         SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}
 
-  deploy-prod:
-    needs: [prepare-matrices, deploy-int]
-    if: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix).include[0] != null }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix) }}
-      fail-fast: false
-    environment: ${{ matrix.github_environment }}
+  # deploy-prod:
+  #   needs: [prepare-matrices, deploy-int]
+  #   if: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix).include[0] != null }}
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix: ${{ fromJSON(needs.prepare-matrices.outputs.prod_matrix) }}
+  #     fail-fast: false
+  #   environment: ${{ matrix.github_environment }}
     
-    name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to PROD
+  #   name: Deploy ${{ matrix.application }}-${{ matrix.resource }} to PROD
     
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
       
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ matrix.aws_region }}
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v4
+  #       with:
+  #         role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+  #         aws-region: ${{ matrix.aws_region }}
       
-      - name: Deploy Stack
-        uses: ./.github/actions/composite
-        with:
-          environment: ${{ matrix.environment }}
-          stack-name: ${{ matrix.parameters.stack-name }}
-          bucket-name: ${{ matrix.parameters.bucket-name }}
-          upload-to-s3: ${{ matrix.parameters.bucket-upload }}
-          target-folder: ${{ matrix.parameters.target-folder }}
-          source-folder: ${{ matrix.parameters.source-folder }}
-          template-name: ${{ matrix.parameters.template-name }}
-          filename-patterns: ${{ matrix.parameters.filename-patterns }}
-          cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
-          extraArgs: ${{ matrix.parameters.extraArgs }}          
-          parameter-file: ${{ matrix.parameters.parameter-file }}
-          inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
-          tags: ${{ matrix.parameters.tags }}
-          aws-region: ${{ matrix.aws_region }}
-          aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
-          iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
-          SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}         
+  #     - name: Deploy Stack
+  #       uses: ./.github/actions/composite
+  #       with:
+  #         environment: ${{ matrix.environment }}
+  #         stack-name: ${{ matrix.parameters.stack-name }}
+  #         bucket-name: ${{ matrix.parameters.bucket-name }}
+  #         upload-to-s3: ${{ matrix.parameters.bucket-upload }}
+  #         target-folder: ${{ matrix.parameters.target-folder }}
+  #         source-folder: ${{ matrix.parameters.source-folder }}
+  #         template-name: ${{ matrix.parameters.template-name }}
+  #         filename-patterns: ${{ matrix.parameters.filename-patterns }}
+  #         cfnLintEnabled: ${{ matrix.parameters.cfnLintEnabled }}
+  #         extraArgs: ${{ matrix.parameters.extraArgs }}          
+  #         parameter-file: ${{ matrix.parameters.parameter-file }}
+  #         inline-parameters: ${{ toJSON(matrix.parameters.inline-parameters) }}
+  #         tags: ${{ matrix.parameters.tags }}
+  #         aws-region: ${{ matrix.aws_region }}
+  #         aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+  #         cfn-role-arn: ${{ secrets.CFN_ROLE_ARN }}
+  #         iam-execution-role-arn: ${{ secrets.IAM_EXECUTION_ROLE_ARN }}
+  #         SECRET_SALT_KEY: ${{ secrets.SECRET_SALT_KEY }}         

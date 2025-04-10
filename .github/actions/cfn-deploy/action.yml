@@ -97,8 +97,7 @@ runs:
     - name: Process and check tags
       id: get-tags
       run: |
-        chmod a+x $GITHUB_ACTION_PATH/process-tags.py
-        $GITHUB_ACTION_PATH/process-tags.py
+        python ./.github/actions/Scripts/main.py tag_processor
       shell: bash
       env:
         INPUT_TAGS: ${{ inputs.tags-json }}
@@ -126,8 +125,7 @@ runs:
     - name: Get parameter files
       id: get-param-file
       run: |
-          chmod a+x $GITHUB_ACTION_PATH/get-parameter-file.py
-          $GITHUB_ACTION_PATH/get-parameter-file.py
+        python ./.github/actions/Scripts/main.py parameter_processor
       shell: bash
       env:
           INPUT_PARAMETER_OVERRIDES: ${{ inputs.parameter-file }}

@@ -60,21 +60,21 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set up AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ inputs.aws-role-to-assume }}
-        aws-region: ${{ inputs.aws-region }}
+    # - name: Set up AWS credentials
+    #   uses: aws-actions/configure-aws-credentials@v4
+    #   with:
+    #     role-to-assume: ${{ inputs.aws-role-to-assume }}
+    #     aws-region: ${{ inputs.aws-region }}
     
-    - name: Upload files to S3 bucket
-      if: inputs.upload-to-s3 == 'true'
-      uses: ./.github/actions/s3-upload
-      with:
-        bucket-name: ${{ inputs.bucket-name }}
-        target-folder: ${{ inputs.target-folder }}
-        source-folder: ${{ inputs.source-folder }}
-        filename-patterns: "*.yaml"
-        acl: private
+    # - name: Upload files to S3 bucket
+    #   if: inputs.upload-to-s3 == 'true'
+    #   uses: ./.github/actions/s3-upload
+    #   with:
+    #     bucket-name: ${{ inputs.bucket-name }}
+    #     target-folder: ${{ inputs.target-folder }}
+    #     source-folder: ${{ inputs.source-folder }}
+    #     filename-patterns: "*.yaml"
+    #     acl: private
 
     - name: Deploy AWS Resources via CloudFormation
       uses: ./.github/actions/cfn-deploy

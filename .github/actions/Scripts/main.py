@@ -56,7 +56,7 @@ class Action(ABC):
             logger.addHandler(handler)
         return logger
     
-    def log(self, message: str, level: str = "INFO") -> None:
+    def log(self, message: str, level: str = "DEBUG") -> None:
         """
         Логирование сообщения с временной меткой и уровнем.
         

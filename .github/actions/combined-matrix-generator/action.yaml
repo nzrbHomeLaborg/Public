@@ -34,6 +34,7 @@ runs:
       run: | 
         pip install PyYAML
         pip install requests
+        pip install boto3
         python ./.github/actions/Scripts/main.py matrix_generator
       env:
         INPUT_RESOURCE_PATHS: ${{ inputs.resource_paths }}

@@ -70,7 +70,7 @@ deployments:
           - ParameterKey: TopicName
             ParameterValue: A-topic-1
           - ParameterKey: email
-            ParameterValue: vezarqrchik@gmail.com 
+            ParameterValue: vezarqrchik@gmail.com
       qa:
         custom_deployment: true
         deploy_after: "int"

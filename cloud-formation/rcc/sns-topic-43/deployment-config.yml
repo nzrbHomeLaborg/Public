@@ -54,4 +54,4 @@ deployments:
         template-name: 'template.yaml'
         inline-parameters:
           - ParameterKey: email
-            ParameterValue: vezarqrchik@gmail.co
+            ParameterValue: vezarqrchik@gmail.com

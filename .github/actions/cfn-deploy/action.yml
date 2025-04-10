@@ -87,12 +87,12 @@ runs:
 #         echo "HTTP_PROXY=${httpProxy}" >> $GITHUB_OUTPUT
 #       shell: bash
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ inputs.iam-execution-role-arn }}
-        aws-region: ${{ inputs.aws-region }}
-        role-session-name: OIDCSession-${{ github.repository_id }}-${{ github.run_id }}-${{ github.job }}
+    # - name: Configure AWS Credentials
+    #   uses: aws-actions/configure-aws-credentials@v4
+    #   with:
+    #     role-to-assume: ${{ inputs.iam-execution-role-arn }}
+    #     aws-region: ${{ inputs.aws-region }}
+    #     role-session-name: OIDCSession-${{ github.repository_id }}-${{ github.run_id }}-${{ github.job }}
 
     - name: Process and check tags
       id: get-tags

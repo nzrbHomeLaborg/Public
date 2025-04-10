@@ -49,117 +49,15 @@ runs:
     - name: Detect Changed Applications
       id: detect-applications
       shell: bash
-      run: |
-        # Function to log messages with a timestamp
-        log() {
-          echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
-        }
-        
-        # For workflow_dispatch events
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          # Get the resource path and app name
-          RESOURCE_PATH="${{ github.event.inputs.resource_path }}"
-          APP_NAME="${{ inputs.app_name }}"
-          
-          # Validate resource path against app_name if app_name is provided
-          if [[ -n "$APP_NAME" ]]; then
-            # Check if the resource path starts with cloud-formation/{app_name}/
-            EXPECTED_PREFIX="cloud-formation/$APP_NAME/"
-            
-            if [[ "$RESOURCE_PATH" != $EXPECTED_PREFIX* ]]; then
-              echo "ERROR: Resource path '$RESOURCE_PATH' is not valid for app '$APP_NAME'"
-              echo "Resource path must start with '$EXPECTED_PREFIX'"
-              echo "paths=" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-          fi
-          
-          echo "paths=$RESOURCE_PATH" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-        
-        CHANGED_PATHS=()
-        CHANGED_FILES=""
-        
-        # Determine event type and get changed files
-        EVENT_NAME="${{ github.event_name }}"
-        
-        if [[ "$EVENT_NAME" == "pull_request" ]]; then
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          
-          # Get only the latest commit SHA in the PR
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          # Get the SHA of the commit before the latest one
-          PREV_SHA=$(git rev-parse $HEAD_SHA^)
-          
-          # Get changes from just the latest commit, not the entire PR
-          CHANGED_FILES=$(git diff --name-only $PREV_SHA $HEAD_SHA)
-          
-          # If no files were found, fall back to the GitHub API
-          if [[ -z "$CHANGED_FILES" ]]; then
-            # Save the API response for inspection
-            API_RESPONSE=$(curl -s -H "Authorization: token ${{ github.token }}" \
-              "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/files")
-            
-            # Check if we got a valid JSON array before processing
-            if echo "$API_RESPONSE" | jq 'if type=="array" then true else false end' | grep -q true; then
-              CHANGED_FILES=$(echo "$API_RESPONSE" | jq -r '.[].filename')
-            else
-              # Fallback to git diff as a recovery mechanism
-              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "")
-            fi
-          fi
-          
-        elif [[ "$EVENT_NAME" == "push" ]]; then
-          PARENT_COUNT=$(git cat-file -p ${{ github.sha }} | grep -c "^parent ")
-          
-          if [[ $PARENT_COUNT -gt 1 ]]; then
-            MERGE_BASE=$(git merge-base ${{ github.event.before }} ${{ github.sha }})
-            CHANGED_FILES=$(git diff --name-only $MERGE_BASE ${{ github.sha }})
-          else
-            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
-            
-            if [[ -z "$CHANGED_FILES" ]]; then
-              CHANGED_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }})
-            fi
-          fi
-        else
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD || echo "")
-        fi
-        
-        while IFS= read -r file; do
-          # Skip empty lines
-          if [[ -z "$file" ]]; then
-            continue
-          fi
-        
-          # Check if the file is a deployment config file
-          if [[ "$file" == cloud-formation/*/*.y*ml ]]; then
-            RESOURCE_PATH=$(dirname "$file")
-        
-            if [[ ! " ${CHANGED_PATHS[@]} " =~ " ${RESOURCE_PATH} " ]]; then
-              CHANGED_PATHS+=("$RESOURCE_PATH")
-            fi
-          fi
-        done <<< "$CHANGED_FILES"
-        
-        # Convert array to comma-separated string
-        if [[ ${#CHANGED_PATHS[@]} -gt 0 ]]; then
-          IFS=,
-          PATHS="${CHANGED_PATHS[*]}"
-        else
-          PATHS=""
-        fi
-        
-        echo "paths=$PATHS" >> $GITHUB_OUTPUT
-        
-        # Debug info for empty results
-        if [[ -z "$PATHS" ]]; then
-          log "No paths detected. Debug information:"
-          log "Event name: $EVENT_NAME"
-          log "Ref: ${{ github.ref }}"
-          log "Base ref: ${{ github.event.pull_request.base.ref || 'N/A' }}"
-          log "SHA: ${{ github.sha }}"
-          log "Before: ${{ github.event.before || 'N/A' }}"
-          log "After: ${{ github.event.after || 'N/A' }}"
-        fi
+      run: python ./.github/actions/detect-changed-applications/detect_changed_applications.py
+      env:
+        INPUT_EVENT_NAME: ${{ inputs.event_name }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
+        INPUT_GITHUB_SHA: ${{ inputs.github_sha }}
+        INPUT_GITHUB_REF: ${{ inputs.github_ref }}
+        INPUT_EVENT_BEFORE: ${{ inputs.event_before }}
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+        INPUT_APP_NAME: ${{ inputs.app_name }}
+        INPUT_PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
+        INPUT_RESOURCE_PATH_INPUT: ${{ inputs.resource_path_input }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}

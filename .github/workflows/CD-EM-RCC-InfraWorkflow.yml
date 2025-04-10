@@ -105,7 +105,7 @@ jobs:
           pull_request_number: ${{ github.event.pull_request.number || '' }}
           resource_path_input: ${{ github.event.inputs.resource_path || '' }}
           repository: ${{ github.repository }}
-          # app_name: rcc
+          app_name: rcc
 
       - name: Show detected paths
         shell: bash

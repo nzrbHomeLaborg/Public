@@ -44,7 +44,9 @@ runs:
     - name: Generate deployment matrices
       id: generate-matrices
       shell: bash
-      run: python ./.github/actions/combined-matrix-generator/generate_deployment_matrices.py
+      run: | 
+        pip install PyYAML
+        python ./.github/actions/combined-matrix-generator/generate_deployment_matrices.py
       env:
         INPUT_RESOURCE_PATHS: ${{ inputs.resource_paths }}
         INPUT_SPECIFIC_ENVIRONMENT: ${{ inputs.specific_environment }}

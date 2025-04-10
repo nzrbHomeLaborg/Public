@@ -795,4 +795,31 @@ class DeploymentMatrixGenerator(Action):
         aws_region = deployment.get('aws_regions', {}).get(env)
         aws_role_secret = deployment.get('aws_role_secrets', {}).get(env, "AWS_ROLE_TO_ASSUME")
         cfn_role_secret = deployment.get('cfn_role_secrets', {}).get(env, "CFN_ROLE_ARN")
-        iam_role_secret = deployment.get('iam_execution_role_secrets', {}).get(env, "
+        iam_role_secret = deployment.get('iam_execution_role_secrets', {}).get(env, "IAM_EXECUTION_ROLE_ARN")
+
+        # Additional parameters
+        vars_config = deployment.get('github_vars', {}).get(env, {})
+        secret_pass = params.get('secret_pass', False)
+        custom_deployment = str(params.get('custom_deployment', "false")).lower()
+
+        # Validation
+        if (not params or params is None or 
+            not runner or runner is None or 
+            not gh_env or gh_env is None or 
+            not aws_region or aws_region is None):
+            # Handle missing required fields
+            return None
+
+        # Create matrix item for this environment
+        matrix_item = {
+            "environment": env,
+            "runner": runner,
+            "github_environment": gh_env,
+            "aws_region": aws_region,
+            "aws_role_secret": aws_role_secret,
+            "cfn_role_secret": cfn_role_secret,
+            "iam_role_secret": iam_role_secret,
+            "parameters": params
+        }
+
+        return matrix_item

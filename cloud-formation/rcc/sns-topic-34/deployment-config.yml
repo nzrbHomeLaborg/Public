@@ -92,7 +92,7 @@ deployments:
         bucket-upload: 'true'
         target-folder: cloud-formation/rcc/sns-topic-34123
         source-folder: cloud-formation/rcc/sns-topic-34
-        # filename-patterns: "*.yaml"
+        # filename-patterns: "*.yaml" 
         template-name: 'template.yaml'
         inline-parameters:
           - ParameterKey: TopicName

@@ -59,7 +59,7 @@ class Action(ABC):
             logger.addHandler(handler)
         return logger
 
-    def log(self, message: str, level: str = "DEBUG") -> None:
+    def log(self, message: str, level: str = "INFO") -> None:
         """
         Log a message with timestamp and level.
         Args:

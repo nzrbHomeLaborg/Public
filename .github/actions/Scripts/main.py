@@ -864,23 +864,20 @@ class ChangeDetector(Action):
             int: Return code (0 - success, non-0 - error)
         """
         self.log("Starting Detect Changed Applications script")
-        
-        # Gather environment variables
+
         event_name = os.environ.get("GITHUB_EVENT_NAME", "")
         github_token = os.environ.get("GITHUB_TOKEN", "")
         github_repository = os.environ.get("GITHUB_REPOSITORY", "")
         github_sha = os.environ.get("GITHUB_SHA", "")
+        github_ref = os.environ.get("GITHUB_REF", "")
         event_before = os.environ.get("GITHUB_EVENT_BEFORE", "")
         github_output = os.environ.get("GITHUB_OUTPUT", "")
-        github_ref = os.environ.get("GITHUB_REF", "")
-        
+        event_path = os.environ.get("GITHUB_EVENT_PATH")
+
         self.log(f"Event name: {event_name}")
         self.log(f"GitHub SHA: {github_sha}")
         self.log(f"GitHub ref: {github_ref}")
-        self.log(f"GitHub repository: {github_repository}")
-        self.log(f"Event before SHA: {event_before}")
 
-        event_path = os.environ.get("GITHUB_EVENT_PATH")
         event_data = {}
         if event_path and os.path.exists(event_path):
             try:
@@ -888,74 +885,60 @@ class ChangeDetector(Action):
                     event_data = json.load(f)
                 self.log(f"Successfully loaded event data from {event_path}")
             except Exception as e:
-                self.log(f"Error loading event data: {str(e)}", "ERROR")
+                self.log(f"Failed to load event data from {event_path}: {str(e)}", "ERROR")
+        else:
+            self.log("No valid event path found or file does not exist", "WARNING")
 
-        # Extract specific event data
-        resource_path = None
-        app_name = None
         pr_number = None
         pr_head_sha = None
+        resource_path = None
+        app_name = None
 
-        # workflow_dispatch
-        if event_name == "workflow_dispatch":
-            self.log("Processing workflow_dispatch event")
-            if "inputs" in event_data and "resource_path" in event_data["inputs"]:
-                resource_path = event_data["inputs"]["resource_path"]
-                self.log(f"Found resource_path in event data: {resource_path}")
-            else:
-                self.log("No resource_path found in event data", "WARNING")
-                
-            # app_name might come from environment
-            app_name = os.environ.get("INPUT_APP_NAME", "")
-            if app_name:
-                self.log(f"Using app_name from environment: {app_name}")
-            else:
-                self.log("No app_name provided in environment", "INFO")
-
-        # pull_request
-        elif event_name == "pull_request":
+        if event_name == "pull_request":
             self.log("Processing pull_request event")
             if "pull_request" in event_data:
                 pr_number = event_data["pull_request"].get("number")
-                self.log(f"Using PR number from event data: {pr_number}")
-                
                 if "head" in event_data["pull_request"]:
                     pr_head_sha = event_data["pull_request"]["head"].get("sha")
-                    self.log(f"Using PR head SHA from event data: {pr_head_sha}")
-                else:
-                    self.log("No head SHA found in pull_request event data", "WARNING")
-            else:
-                self.log("No pull_request data found in event", "WARNING")
-        
-        elif event_name == "push":
-            self.log("Processing push event")
-            if event_before and github_sha:
-                self.log(f"Will compare changes between {event_before} and {github_sha}")
-            else:
-                self.log("Missing before/after SHAs for push event, will use fallback", "WARNING")
-        else:
-            self.log(f"Unsupported event type: {event_name}, will use fallback method", "WARNING")
 
-        # detect changed paths
+            # If user provides PR number as input or environment var
+            pr_number_input = os.environ.get("INPUT_PR_NUMBER", "")
+            if pr_number_input:
+                self.log(f"Using PR number from input: {pr_number_input}")
+                pr_number = pr_number_input if pr_number_input.isdigit() else pr_number
+
+            if pr_number:
+                self.log(f"Using PR number from input/event data: {pr_number}")
+            if pr_head_sha:
+                self.log(f"Using PR head SHA from event data: {pr_head_sha}")
+
+        elif event_name == "workflow_dispatch":
+            self.log("Processing workflow_dispatch event")
+            if "inputs" in event_data and "resource_path" in event_data["inputs"]:
+                resource_path = event_data["inputs"]["resource_path"]
+            # app_name might come from environment
+            app_name = os.environ.get("INPUT_APP_NAME", "")
+
+        else:
+            self.log(f"Processing {event_name} event")
+
         paths = self._detect_changed_applications(
             event_name=event_name,
             github_token=github_token,
             github_repository=github_repository,
             github_sha=github_sha,
             event_before=event_before,
-            pr_number=pr_number,
+            pr_number=(int(pr_number) if pr_number and str(pr_number).isdigit() else None),
             pr_head_sha=pr_head_sha,
             resource_path=resource_path,
             app_name=app_name
         )
 
-        # Output the result
         if github_output:
             with open(github_output, 'a') as f:
                 f.write(f"paths={paths}\n")
-            self.log(f"Detected paths written to GITHUB_OUTPUT: {paths}")
+            self.log(f"Detected paths: {paths}")
         else:
-            self.log("GITHUB_OUTPUT environment variable not set, printing to stdout", "WARNING")
             print(f"paths={paths}")
 
         self.log("Detect Changed Applications script completed successfully")
@@ -965,138 +948,75 @@ class ChangeDetector(Action):
     #                       Internal Helper Methods                            #
     ###########################################################################
     def _run_command(self, command: str) -> str:
-        """Run a shell command and return the output."""
+        """Run a shell command and return the output, with added DEBUG logging."""
         self.log(f"Running command: {command}", "DEBUG")
         try:
             result = subprocess.run(command, shell=True, check=True, text=True, capture_output=True)
-            if result.stdout:
-                self.log(f"Command output length: {len(result.stdout.strip())} characters", "DEBUG")
-            return result.stdout.strip()
+            output = result.stdout.strip()
+            self.log(f"Command output length: {len(output)} characters", "DEBUG")
+            return output
         except subprocess.CalledProcessError as e:
-            self.log(f"Command failed with exit code {e.returncode}: {command}", "ERROR")
-            self.log(f"Error output: {e.stderr}", "ERROR")
+            self.log(f"Command failed: {command}", "ERROR")
+            self.log(f"Error: {e}", "ERROR")
             return ""
 
     def _get_changed_files_pull_request(self, github_token: str, repo: str,
                                         pr_number: int, head_sha: str) -> List[str]:
         """
         Get changed files from a pull request using git and GitHub API as a fallback.
+        Adds logging to show the chosen approach.
         """
         self.log(f"Getting changed files for PR #{pr_number}, HEAD SHA: {head_sha}")
-        
-        # Try to get the SHA of the commit before the latest one
         prev_sha = self._run_command(f"git rev-parse {head_sha}^")
-        
         if prev_sha:
             self.log(f"Found previous SHA: {prev_sha}")
-            # Get changes from just the latest commit, not the entire PR
             changed_files = self._run_command(f"git diff --name-only {prev_sha} {head_sha}")
             if changed_files:
-                file_list = changed_files.splitlines()
-                self.log(f"Found {len(file_list)} changed files using git diff")
-                return file_list
-            else:
-                self.log("No changed files found using direct git diff", "WARNING")
-        else:
-            self.log("Could not determine previous SHA", "WARNING")
+                files_list = changed_files.splitlines()
+                self.log(f"Found {len(files_list)} changed files using git diff")
+                return files_list
 
         # Fallback to GitHub API
-        self.log(f"Falling back to GitHub API for PR #{pr_number}")
+        self.log("Falling back to GitHub API for changed files (git approach returned nothing)", "WARNING")
         api_url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/files"
         headers = {"Authorization": f"token {github_token}"}
-        
-        try:
-            self.log(f"Making API request to: {api_url}")
-            response = requests.get(api_url, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    file_list = [file['filename'] for file in data]
-                    self.log(f"Found {len(file_list)} changed files using GitHub API")
-                    return file_list
-                else:
-                    self.log(f"Unexpected API response format: {type(data)}", "WARNING")
-            else:
-                self.log(f"API request failed with status code: {response.status_code}", "WARNING")
-                self.log(f"Response: {response.text[:200]}{'...' if len(response.text) > 200 else ''}", "DEBUG")
-        except Exception as e:
-            self.log(f"Error making API request: {str(e)}", "ERROR")
-        
+        response = requests.get(api_url, headers=headers)
+
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, list):
+                self.log(f"GitHub API returned {len(data)} changed files")
+                return [file['filename'] for file in data]
+
         # Final fallback
-        self.log("Using final fallback: git diff between HEAD~1 and HEAD")
-        return self._run_command("git diff --name-only HEAD~1 HEAD").splitlines()
+        self.log("Falling back to a generic git diff (HEAD~1 HEAD)", "WARNING")
+        changed_files = self._run_command("git diff --name-only HEAD~1 HEAD")
+        files_list = changed_files.splitlines()
+        self.log(f"Found {len(files_list)} changed files in final fallback approach")
+        return files_list
 
     def _get_changed_files_push(self, before_sha: str, after_sha: str) -> List[str]:
-        """Get changed files from a push event."""
-        self.log(f"Getting changed files for push event from {before_sha} to {after_sha}")
-        
-        # Check if this is a merge commit
-        parent_count_cmd = f"git cat-file -p {after_sha} | grep -c '^parent '"
-        parent_count = self._run_command(parent_count_cmd)
-        
-        try:
-            parent_count = int(parent_count)
-            self.log(f"Commit has {parent_count} parents")
-        except ValueError:
-            self.log(f"Could not determine parent count, assuming 1", "WARNING")
-            parent_count = 0
-        
-        if parent_count > 1:
-            # This is a merge commit, find the merge base
-            self.log("Detected merge commit, finding merge base")
-            merge_base = self._run_command(f"git merge-base {before_sha} {after_sha}")
-            if merge_base:
-                self.log(f"Found merge base: {merge_base}")
-                changed_files = self._run_command(f"git diff --name-only {merge_base} {after_sha}")
-                if changed_files:
-                    file_list = changed_files.splitlines()
-                    self.log(f"Found {len(file_list)} changed files using merge base")
-                    return file_list
-                else:
-                    self.log("No files found using merge base", "WARNING")
-            else:
-                self.log("Could not determine merge base", "WARNING")
-        else:
-            # Regular commit
-            self.log("Regular commit, using direct diff")
-            changed_files = self._run_command(f"git diff --name-only {before_sha} {after_sha}")
-            
-            if changed_files:
-                file_list = changed_files.splitlines()
-                self.log(f"Found {len(file_list)} changed files using direct diff")
-                return file_list
-            else:
-                # Try with double-dot notation
-                self.log("No files found, trying with double-dot notation")
-                changed_files = self._run_command(f"git diff --name-only {before_sha}..{after_sha}")
-                if changed_files:
-                    file_list = changed_files.splitlines()
-                    self.log(f"Found {len(file_list)} changed files using double-dot diff")
-                    return file_list
-                else:
-                    self.log("No files found using double-dot notation", "WARNING")
-        
-        # Fallback
-        self.log("No changes detected or all methods failed, using fallback")
-        return self._run_command("git diff --name-only HEAD~1 HEAD").splitlines()
+        """Get changed files from a push event, with detailed INFO logs."""
+        self.log(f"Getting changed files for push event: before={before_sha}, after={after_sha}")
+        parent_count_str = self._run_command(f"git cat-file -p {after_sha} | grep -c '^parent '")
 
-    def _validate_resource_path(self, resource_path: str, app_name: Optional[str]) -> bool:
-        """
-        Validate resource path against app_name for workflow_dispatch events.
-        """
-        if not app_name:
-            self.log("No app_name provided, skipping validation")
-            return True
-        
-        expected_prefix = f"cloud-formation/{app_name}/"
-        
-        if not resource_path.startswith(expected_prefix):
-            self.log(f"Resource path validation failed: '{resource_path}' does not start with '{expected_prefix}'", "ERROR")
-            return False
-        
-        self.log(f"Resource path validation passed for '{resource_path}'")
-        return True
+        try:
+            parent_count = int(parent_count_str)
+        except ValueError:
+            parent_count = 0
+
+        if parent_count > 1:
+            self.log("Detected a merge commit, using merge-base to find changed files")
+            merge_base = self._run_command(f"git merge-base {before_sha} {after_sha}")
+            changed_files = self._run_command(f"git diff --name-only {merge_base} {after_sha}")
+        else:
+            changed_files = self._run_command(f"git diff --name-only {before_sha} {after_sha}")
+            if not changed_files:
+                changed_files = self._run_command(f"git diff --name-only {before_sha}..{after_sha}")
+
+        files_list = changed_files.splitlines()
+        self.log(f"Found {len(files_list)} changed files in push event")
+        return files_list
 
     def _detect_changed_applications(
         self,
@@ -1110,73 +1030,53 @@ class ChangeDetector(Action):
         resource_path: Optional[str] = None,
         app_name: Optional[str] = None
     ) -> str:
-        """Detect changed applications (cloud-formation paths)."""
-
-        # For workflow_dispatch events
+        """
+        Detect changed applications (cloud-formation paths) with extra logging.
+        """
+        # If workflow_dispatch with a resource_path, validate it quickly
         if event_name == "workflow_dispatch" and resource_path:
-            self.log(f"Processing workflow_dispatch with resource_path: {resource_path}")
-            
-            # Validate resource path against app_name if provided
             if app_name:
-                if not self._validate_resource_path(resource_path, app_name):
-                    self.log(f"Resource path validation failed, returning empty result", "ERROR")
+                expected_prefix = f"cloud-formation/{app_name}/"
+                if not resource_path.startswith(expected_prefix):
+                    self.log(f"ERROR: Resource path '{resource_path}' is not valid for app '{app_name}'", "ERROR")
+                    self.log(f"Resource path must start with '{expected_prefix}'", "ERROR")
                     return ""
-                    
-            self.log(f"Using provided resource path: {resource_path}")
             return resource_path
 
         changed_paths = set()
         changed_files = []
 
-        # Get changed files based on event type
+        # Determine how to get changed files based on the event
         if event_name == "pull_request" and pr_number and pr_head_sha:
-            self.log(f"Processing pull_request event with PR #{pr_number}")
             changed_files = self._get_changed_files_pull_request(
                 github_token, github_repository, pr_number, pr_head_sha
             )
         elif event_name == "push" and event_before:
-            self.log(f"Processing push event from {event_before} to {github_sha}")
             changed_files = self._get_changed_files_push(event_before, github_sha)
         else:
-            self.log("Using fallback method: diff between HEAD~1 and HEAD", "WARNING")
-            changed_files = self._run_command("git diff --name-only HEAD~1 HEAD").splitlines()
+            self.log("Using default git diff for changed files (HEAD~1 HEAD)", "WARNING")
+            diff_output = self._run_command("git diff --name-only HEAD~1 HEAD")
+            changed_files = diff_output.splitlines()
+            self.log(f"Found {len(changed_files)} changed files in default approach")
 
         self.log(f"Processing {len(changed_files)} changed files")
-        
-        # Process changed files to find cloud-formation changes
         for file in changed_files:
             if not file:
                 continue
-
-            # Check if the file is a deployment config file
+            # Check if the file is a deployment config
             if file.startswith("cloud-formation/") and (file.endswith(".yml") or file.endswith(".yaml")):
                 path_dir = os.path.dirname(file)
-                if path_dir not in changed_paths:
-                    changed_paths.add(path_dir)
-                    self.log(f"Detected changed resource path: {path_dir}")
+                changed_paths.add(path_dir)
+                self.log(f"Detected changed resource path: {path_dir}")
 
         # Convert set to comma-separated string
         paths = ",".join(sorted(changed_paths))
-
-        # Debug info if no paths found
-        if not paths:
-            self.log("No cloud-formation paths detected. Debug information:", "WARNING")
-            self.log(f"Event name: {event_name}", "WARNING")
-            self.log(f"SHA: {github_sha}", "WARNING")
-            self.log(f"Before: {event_before or 'N/A'}", "WARNING")
-            self.log(f"Total changed files: {len(changed_files)}", "WARNING")
-            
-            # Log a sample of changed files for debugging
-            sample_size = min(5, len(changed_files))
-            if sample_size > 0:
-                self.log(f"Sample of changed files:", "WARNING")
-                for i in range(sample_size):
-                    self.log(f" - {changed_files[i]}", "WARNING")
+        if paths:
+            self.log(f"Detected {len(changed_paths)} changed paths: {paths}")
         else:
-            self.log(f"Detected {len(changed_paths)} changed CloudFormation resource paths")
+            self.log("No cloud-formation paths detected", "WARNING")
 
         return paths
-
 
 ###############################################################################
 #                                Entry Point                                  #

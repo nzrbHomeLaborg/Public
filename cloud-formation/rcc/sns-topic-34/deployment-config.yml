@@ -32,7 +32,7 @@ deployments:
     iam_execution_role_secrets:
       dev: IAM_EXECUTION_ROLE_ARN
       int: IAM_EXECUTION_ROLE_ARN
-      stg: IAM_EXECUTION_ROLE_ARN
+      stg: IAM_EXECUTION_ROLE_ARN 
       qa: IAM_EXECUTION_ROLE_ARN
     github_vars:
       dev:

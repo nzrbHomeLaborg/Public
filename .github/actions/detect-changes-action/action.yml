@@ -49,7 +49,7 @@ runs:
     - name: Detect Changed Applications
       id: detect-applications
       shell: bash
-      run: python ./.github/actions/detect-changes-action/detect_changed_applications.py
+      run: python ./.github/actions/Scripts/main.py change_detector
       env:
         INPUT_EVENT_NAME: ${{ inputs.event_name }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}

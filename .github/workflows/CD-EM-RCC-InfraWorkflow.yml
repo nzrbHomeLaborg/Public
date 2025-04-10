@@ -152,15 +152,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up secrets for parameter processing
-        id: setup-secrets
-        shell: bash
-        run: |
-          echo '${{ toJSON(secrets) }}' > /tmp/github_secrets_plaintext.json
-          echo -n "${{ secrets.SECRET_SALT_KEY }}" | sha256sum | cut -d' ' -f1 > /tmp/encryption_key
-          openssl enc -aes-256-cbc -pbkdf2 -iter 10000 -salt -in /tmp/github_secrets_plaintext.json -out /tmp/github_secrets.encrypted -pass file:/tmp/encryption_key
-          rm /tmp/github_secrets_plaintext.json /tmp/encryption_key
-          echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.encrypted" >> $GITHUB_ENV
+      # - name: Set up secrets for parameter processing
+      #   id: setup-secrets
+      #   shell: bash
+      #   run: |
+      #     echo '${{ toJSON(secrets) }}' > /tmp/github_secrets_plaintext.json
+      #     echo -n "${{ secrets.SECRET_SALT_KEY }}" | sha256sum | cut -d' ' -f1 > /tmp/encryption_key
+      #     openssl enc -aes-256-cbc -pbkdf2 -iter 10000 -salt -in /tmp/github_secrets_plaintext.json -out /tmp/github_secrets.encrypted -pass file:/tmp/encryption_key
+      #     rm /tmp/github_secrets_plaintext.json /tmp/encryption_key
+      #     echo "GITHUB_SECRETS_PATH=/tmp/github_secrets.encrypted" >> $GITHUB_ENV
 
       - name: Check resource dependencies
         if: ${{ fromJson(matrix.depends_on_resources)[0] != null }}
